@@ -55,6 +55,13 @@ type Order = {
   total: number;
   status: string;
   expectedDelivery: string;
+  createdByUserId?: number;
+  createdBy?: string;
+  createdByRole?: string;
+  createdAt?: string;
+  rejectionNote?: string;
+  rejectedBy?: string;
+  rejectedAt?: string;
 };
 
 type OrderItemInput = PurchaseOrderItemInputValue;
@@ -102,6 +109,45 @@ type GoodsItem = {
   notes: string;
 };
 
+type UserSummary = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+};
+
+const getCurrentUser = (users: UserSummary[], userRole: string) => {
+  const email = localStorage.getItem("userEmail") || "";
+  const matchedUser = users.find((user) => user.email.toLowerCase() === email.toLowerCase());
+
+  if (matchedUser) return matchedUser;
+
+  return {
+    id: userRole === "admin" ? 0 : -1,
+    name: userRole === "admin" ? "Admin" : email || "Local User",
+    email: email || (userRole === "admin" ? "admin@local" : "local-user"),
+    role: userRole,
+  };
+};
+
+const getOrderCreator = (order: Order, users: UserSummary[]) => {
+  if (order.createdByRole === "admin") return "Admin";
+
+  const byId = typeof order.createdByUserId === "number"
+    ? users.find((user) => user.id === order.createdByUserId)
+    : undefined;
+  if (byId) return byId.name;
+
+  const byEmail = order.createdBy
+    ? users.find((user) => user.email.toLowerCase() === order.createdBy?.toLowerCase())
+    : undefined;
+  if (byEmail) return byEmail.name;
+
+  return order.createdBy || "Legacy / Unknown user";
+};
+
+const getOrderCreatorRole = (order: Order) => order.createdByRole || "unknown";
+
 export function PurchaseOrders() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -110,8 +156,11 @@ export function PurchaseOrders() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [showSuppliersListModal, setShowSuppliersListModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [rejectingOrder, setRejectingOrder] = useState<Order | null>(null);
+  const [rejectionNote, setRejectionNote] = useState("");
   const [userRole, setUserRole] = useState<string>("staff");
 
   useEffect(() => {
@@ -140,6 +189,7 @@ export function PurchaseOrders() {
   );
 
   const [orders, setOrders] = useLocalStorageState<Order[]>("purchaseOrders.orders", []);
+  const [users] = useLocalStorageState<UserSummary[]>("users.records", []);
 
   const statuses = ["all", "pending", "approved", "received", "partial", "rejected", "cancelled"];
 
@@ -180,7 +230,61 @@ export function PurchaseOrders() {
     { label: "Total Orders", value: orders.length, color: "text-blue-600" },
     { label: "Pending", value: orders.filter(o => o.status === "pending").length, color: "text-yellow-600" },
     { label: "Approved", value: orders.filter(o => o.status === "approved").length, color: "text-blue-600" },
-    { label: "Received", value: orders.filter(o => o.status === "received").length, color: "text-green-600" },
+    { label: "Partial", value: orders.filter(o => o.status === "partial").length, color: "text-orange-600" },
+    { label: "Rejected", value: orders.filter(o => o.status === "rejected").length, color: "text-red-600" },
+  ];
+
+  const approvalLevels = [
+    {
+      label: "For Review",
+      status: "pending",
+      value: orders.filter(o => o.status === "pending").length,
+      description: "Needs admin approval or rejection",
+      icon: Clock,
+      color: "text-yellow-700",
+      bg: "bg-yellow-50",
+      border: "border-yellow-200",
+    },
+    {
+      label: "Approved",
+      status: "approved",
+      value: orders.filter(o => o.status === "approved").length,
+      description: "Ready for goods receiving",
+      icon: CheckCircle,
+      color: "text-blue-700",
+      bg: "bg-blue-50",
+      border: "border-blue-200",
+    },
+    {
+      label: "Partial",
+      status: "partial",
+      value: orders.filter(o => o.status === "partial").length,
+      description: "Partially received or accepted",
+      icon: AlertCircle,
+      color: "text-orange-700",
+      bg: "bg-orange-50",
+      border: "border-orange-200",
+    },
+    {
+      label: "Rejected",
+      status: "rejected",
+      value: orders.filter(o => o.status === "rejected").length,
+      description: "Stopped by admin review",
+      icon: XCircle,
+      color: "text-red-700",
+      bg: "bg-red-50",
+      border: "border-red-200",
+    },
+    {
+      label: "Received",
+      status: "received",
+      value: orders.filter(o => o.status === "received").length,
+      description: "Completed through goods receiving",
+      icon: Check,
+      color: "text-green-700",
+      bg: "bg-green-50",
+      border: "border-green-200",
+    },
   ];
 
   const [suppliers, setSuppliers] = useLocalStorageState<Supplier[]>("purchaseOrders.suppliers", []);
@@ -318,6 +422,7 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
 
     const orderNumber = orders.length + 1;
     const newOrderId = `PO-2024-${String(orderNumber).padStart(3, '0')}`;
+    const creator = getCurrentUser(users, userRole);
 
     const orderToAdd: Order = {
       id: newOrderId,
@@ -328,6 +433,10 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
       total: calculateTotal(),
       status: "pending",
       expectedDelivery: newOrder.expectedDelivery,
+      createdByUserId: creator.id,
+      createdBy: creator.email,
+      createdByRole: creator.role,
+      createdAt: new Date().toISOString(),
     };
 
     setOrders([orderToAdd, ...orders]);
@@ -362,9 +471,18 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
     let csvContent = "Purchase Order Details\n\n";
     csvContent += `Order ID:,${order.id}\n`;
     csvContent += `Supplier:,${order.supplier}\n`;
+    csvContent += `Created By:,${getOrderCreator(order, users)}\n`;
+    csvContent += `Creator User ID:,${order.createdByUserId ?? "N/A"}\n`;
+    csvContent += `Creator Role:,${getOrderCreatorRole(order)}\n`;
+    csvContent += `Created At:,${order.createdAt || order.date}\n`;
     csvContent += `Order Date:,${order.date}\n`;
     csvContent += `Expected Delivery:,${order.expectedDelivery}\n`;
     csvContent += `Status:,${order.status}\n\n`;
+    if (order.rejectionNote) {
+      csvContent += `Rejection Note:,${order.rejectionNote}\n`;
+      csvContent += `Rejected By:,${order.rejectedBy || "Admin"}\n`;
+      csvContent += `Rejected At:,${order.rejectedAt || "N/A"}\n\n`;
+    }
     csvContent += "Items:\n";
     csvContent += "Product Name,Quantity,Unit,Unit Price,Total\n";
 
@@ -414,6 +532,35 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
     const approvedOrder = { ...order, status: "approved" };
     setOrders(orders.map(currentOrder => currentOrder.id === order.id ? approvedOrder : currentOrder));
     createGoodsReceivedRecord(approvedOrder);
+  };
+
+  const openRejectOrderModal = (order: Order) => {
+    setRejectingOrder(order);
+    setRejectionNote(order.rejectionNote || "");
+    setShowRejectModal(true);
+  };
+
+  const handleRejectOrder = () => {
+    if (!rejectingOrder) return;
+
+    const trimmedNote = rejectionNote.trim();
+    if (!trimmedNote) {
+      alert("Please enter a rejection note before rejecting this order.");
+      return;
+    }
+
+    const rejectedOrder: Order = {
+      ...rejectingOrder,
+      status: "rejected",
+      rejectionNote: trimmedNote,
+      rejectedBy: localStorage.getItem("userEmail") || "Admin",
+      rejectedAt: new Date().toISOString(),
+    };
+
+    setOrders(orders.map(order => order.id === rejectingOrder.id ? rejectedOrder : order));
+    setShowRejectModal(false);
+    setRejectingOrder(null);
+    setRejectionNote("");
   };
 
   const handleCancelOrder = (orderId: string) => {
@@ -532,6 +679,41 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
         ))}
       </div>
 
+      {userRole === "admin" && (
+        <div className="bg-card rounded-2xl p-4 shadow-sm border border-border mb-8">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-foreground">Admin Approval Level</h2>
+              <p className="text-sm text-muted-foreground">Monitor purchase orders by approval decision before goods receiving.</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            {approvalLevels.map((level) => {
+              const Icon = level.icon;
+              return (
+                <button
+                  key={level.status}
+                  type="button"
+                  onClick={() => setStatusFilter(level.status)}
+                  className={`text-left rounded-xl border ${level.border} ${level.bg} p-4 transition-all hover:shadow-sm ${
+                    statusFilter === level.status ? "ring-2 ring-primary/40" : ""
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className={`text-sm font-semibold ${level.color}`}>{level.label}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{level.description}</p>
+                    </div>
+                    <Icon className={`w-5 h-5 ${level.color}`} />
+                  </div>
+                  <p className={`text-2xl font-bold mt-4 ${level.color}`}>{level.value}</p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Search and Filter */}
       <div className="bg-card rounded-2xl p-2 shadow-sm border border-border mb-8">
         <div className="flex flex-col md:flex-row gap-6">
@@ -570,6 +752,7 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
               <tr>
                 <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Order ID</th>
                 <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Supplier</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Created By</th>
                 <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Date</th>
                 <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Items</th>
                 <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Total</th>
@@ -585,6 +768,13 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
                     <span className="font-medium text-primary">{order.id}</span>
                   </td>
                   <td className="px-6 py-4 text-foreground">{order.supplier}</td>
+                  <td className="px-6 py-4">
+                    <div className="min-w-[150px]">
+                      <p className="text-sm font-medium text-foreground break-words">{getOrderCreator(order, users)}</p>
+                      <p className="text-xs text-muted-foreground">ID: {order.createdByUserId ?? "N/A"}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{getOrderCreatorRole(order)}</p>
+                    </div>
+                  </td>
                   <td className="px-6 py-4 text-muted-foreground">{order.date}</td>
                   <td className="px-6 py-4 text-foreground">{order.items}</td>
                   <td className="px-6 py-4 text-foreground font-medium">₱{order.total.toLocaleString()}</td>
@@ -602,12 +792,12 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
                       <button
                         onClick={() => handleEditOrder(order)}
                         className={`p-6 rounded-2xl transition-colors ${
-                          order.status === "received" || order.status === "cancelled"
+                          order.status === "received" || order.status === "cancelled" || order.status === "rejected"
                             ? "text-muted-foreground cursor-not-allowed opacity-50"
                             : "hover:bg-orange-50 text-orange-600"
                         }`}
-                        title={order.status === "received" || order.status === "cancelled" ? "Cannot edit received or cancelled orders" : "Edit Order"}
-                        disabled={order.status === "received" || order.status === "cancelled"}
+                        title={order.status === "received" || order.status === "cancelled" || order.status === "rejected" ? "Cannot edit received, cancelled, or rejected orders" : "Edit Order"}
+                        disabled={order.status === "received" || order.status === "cancelled" || order.status === "rejected"}
                       >
                         <Edit className="w-4 h-4" />
                       </button>
@@ -619,15 +809,24 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
                         <Download className="w-4 h-4" />
                       </button>
                       {order.status === "pending" && userRole === "admin" && (
-                        <button
-                          onClick={() => handleApproveOrder(order)}
-                          className="p-6 hover:bg-green-50 text-green-600 rounded-2xl transition-colors"
-                          title="Approve and create GRN"
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleApproveOrder(order)}
+                            className="px-4 py-2 hover:bg-green-50 text-green-700 border border-green-200 rounded-xl transition-colors text-sm font-semibold"
+                            title="Approve and create GRN"
+                          >
+                            Approved
+                          </button>
+                          <button
+                            onClick={() => openRejectOrderModal(order)}
+                            className="px-4 py-2 hover:bg-red-50 text-red-700 border border-red-200 rounded-xl transition-colors text-sm font-semibold"
+                            title="Reject Order"
+                          >
+                            Rejected
+                          </button>
+                        </>
                       )}
-                      {order.status === "pending" && (
+                      {order.status === "pending" && userRole !== "admin" && (
                         <button
                           onClick={() => handleCancelOrder(order.id)}
                           className="p-6 hover:bg-red-50 text-red-600 rounded-2xl transition-colors"
@@ -812,6 +1011,12 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
                     <p className="text-sm text-muted-foreground mb-1">Expected Delivery</p>
                     <p className="text-foreground">{selectedOrder.expectedDelivery}</p>
                   </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Created By</p>
+                    <p className="font-medium text-foreground break-words">{getOrderCreator(selectedOrder, users)}</p>
+                    <p className="text-xs text-muted-foreground">User ID: {selectedOrder.createdByUserId ?? "N/A"}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{getOrderCreatorRole(selectedOrder)}</p>
+                  </div>
                 </div>
                 <div className="space-y-4">
                   <div>
@@ -828,6 +1033,22 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
                   </div>
                 </div>
               </div>
+
+              {selectedOrder.status === "rejected" && selectedOrder.rejectionNote && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                  <div className="flex items-start gap-3">
+                    <XCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-700" />
+                    <div>
+                      <p className="text-sm font-semibold text-red-900">Rejection Remarks</p>
+                      <p className="mt-1 text-sm text-red-800">{selectedOrder.rejectionNote}</p>
+                      <p className="mt-2 text-xs text-red-700">
+                        Rejected by {selectedOrder.rejectedBy || "Admin"}
+                        {selectedOrder.rejectedAt ? ` on ${new Date(selectedOrder.rejectedAt).toLocaleString()}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Order Items Table */}
               <div className="border-t border-border pt-6">
@@ -886,6 +1107,69 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Order Modal */}
+      {showRejectModal && rejectingOrder && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowRejectModal(false)}>
+          <div className="bg-card rounded-2xl shadow-xl border border-border w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-foreground">Reject Purchase Order</h2>
+                <p className="text-sm text-muted-foreground mt-1">{rejectingOrder.id} - {rejectingOrder.supplier}</p>
+                <p className="text-xs text-muted-foreground mt-1">Created by {getOrderCreator(rejectingOrder, users)}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setRejectingOrder(null);
+                  setRejectionNote("");
+                }}
+                className="p-2 hover:bg-muted rounded-xl transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 mb-4">
+              <p className="text-sm text-red-800">
+                Add the reason why this PO is rejected. This note will be saved with the order for admin review and audit trail.
+              </p>
+            </div>
+
+            <label htmlFor="rejectionNote" className="block text-sm font-semibold text-foreground mb-2">
+              Rejection remarks *
+            </label>
+            <textarea
+              id="rejectionNote"
+              value={rejectionNote}
+              onChange={(event) => setRejectionNote(event.target.value)}
+              placeholder="Example: Supplier price mismatch, duplicate order, wrong quantity, missing approval document..."
+              className="min-h-[130px] w-full rounded-xl border border-input bg-input-background px-4 py-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+            />
+
+            <div className="flex gap-3 pt-5">
+              <button
+                type="button"
+                onClick={handleRejectOrder}
+                className="flex-1 px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 font-semibold"
+              >
+                Rejected
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setRejectingOrder(null);
+                  setRejectionNote("");
+                }}
+                className="px-6 py-3 bg-muted text-foreground rounded-xl hover:bg-muted/80 transition-all duration-200"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

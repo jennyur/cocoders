@@ -29,6 +29,7 @@ type Recipe = {
   costPerServing: number;
   targetFoodCost?: number;
   suggestedSellingPrice?: number;
+  sellingPrice?: number;
   grossMargin?: number;
   isActive?: boolean;
   instructions: string;
@@ -67,11 +68,13 @@ const calculateRecipeYieldAdjustedCost = (recipe: Recipe) => {
 };
 
 const calculateRecipeGrossMarginPercent = (recipe: Recipe) => {
-  const sellingPrice = recipe.suggestedSellingPrice || 0;
+  const sellingPrice = recipe.sellingPrice ?? recipe.suggestedSellingPrice ?? 0;
   return sellingPrice > 0 ? ((sellingPrice - recipe.costPerServing) / sellingPrice) * 100 : 0;
 };
 
 export function RecipeBOM() {
+  const userRole = typeof window !== "undefined" ? localStorage.getItem("userRole") || "staff" : "staff";
+  const isAdmin = userRole === "admin";
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -87,6 +90,7 @@ export function RecipeBOM() {
     servings: "",
     yieldPercentage: "100",
     targetFoodCost: "35",
+    sellingPrice: "",
     isActive: true,
     prepTime: "",
     instructions: "",
@@ -221,17 +225,27 @@ export function RecipeBOM() {
     return targetFoodCost > 0 ? calculateCostPerServing() / (targetFoodCost / 100) : 0;
   };
 
+  const calculateMenuSellingPrice = () => {
+    const manualPrice = Number(newRecipe.sellingPrice);
+    return Number.isFinite(manualPrice) && manualPrice > 0 ? manualPrice : calculateSuggestedSellingPrice();
+  };
+
   const calculateGrossMargin = () => {
-    return calculateSuggestedSellingPrice() - calculateCostPerServing();
+    return calculateMenuSellingPrice() - calculateCostPerServing();
   };
 
   const calculateGrossMarginPercent = () => {
-    const suggestedSellingPrice = calculateSuggestedSellingPrice();
-    return suggestedSellingPrice > 0 ? (calculateGrossMargin() / suggestedSellingPrice) * 100 : 0;
+    const menuSellingPrice = calculateMenuSellingPrice();
+    return menuSellingPrice > 0 ? (calculateGrossMargin() / menuSellingPrice) * 100 : 0;
   };
 
   const handleCreateRecipe = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isAdmin) {
+      alert("Only admin users can create or edit recipes and pricing.");
+      return;
+    }
 
     if (ingredients.length === 0) {
       alert("Please add at least one ingredient");
@@ -241,6 +255,7 @@ export function RecipeBOM() {
     const servings = parseInt(newRecipe.servings);
     const yieldPercentage = Number(newRecipe.yieldPercentage);
     const targetFoodCost = Number(newRecipe.targetFoodCost) || 0;
+    const sellingPriceInput = Number(newRecipe.sellingPrice);
     const prepTime = parseInt(newRecipe.prepTime);
 
     if (!Number.isFinite(servings) || servings <= 0) {
@@ -255,6 +270,10 @@ export function RecipeBOM() {
       alert("Target food cost percentage must be between 1 and 100");
       return;
     }
+    if (newRecipe.sellingPrice && (!Number.isFinite(sellingPriceInput) || sellingPriceInput <= 0)) {
+      alert("Menu selling price must be greater than zero when entered");
+      return;
+    }
     if (!Number.isFinite(prepTime) || prepTime < 0) {
       alert("Prep time cannot be negative");
       return;
@@ -264,7 +283,8 @@ export function RecipeBOM() {
     const yieldAdjustedCost = calculateYieldAdjustedCost();
     const costPerServing = yieldAdjustedCost / servings;
     const suggestedSellingPrice = targetFoodCost > 0 ? costPerServing / (targetFoodCost / 100) : 0;
-    const grossMargin = suggestedSellingPrice > 0 ? suggestedSellingPrice - costPerServing : 0;
+    const sellingPrice = newRecipe.sellingPrice ? sellingPriceInput : suggestedSellingPrice;
+    const grossMargin = sellingPrice > 0 ? sellingPrice - costPerServing : 0;
 
     const recipeToAdd: Recipe = {
       id: editingRecipe?.id || `RCP-${String(recipes.length + 1).padStart(3, '0')}`,
@@ -279,6 +299,7 @@ export function RecipeBOM() {
       yieldAdjustedCost,
       costPerServing: costPerServing,
       suggestedSellingPrice,
+      sellingPrice,
       grossMargin,
       isActive: newRecipe.isActive,
       instructions: newRecipe.instructions,
@@ -296,6 +317,7 @@ export function RecipeBOM() {
       servings: "",
       yieldPercentage: "100",
       targetFoodCost: "35",
+      sellingPrice: "",
       isActive: true,
       prepTime: "",
       instructions: "",
@@ -310,6 +332,11 @@ export function RecipeBOM() {
   };
 
   const handleEditRecipe = (recipe: Recipe) => {
+    if (!isAdmin) {
+      alert("Only admin users can edit recipes and pricing.");
+      return;
+    }
+
     setEditingRecipe(recipe);
     setNewRecipe({
       name: recipe.name,
@@ -317,6 +344,7 @@ export function RecipeBOM() {
       servings: recipe.servings.toString(),
       yieldPercentage: recipe.yieldPercentage.toString(),
       targetFoodCost: (recipe.targetFoodCost || 35).toString(),
+      sellingPrice: (recipe.sellingPrice ?? recipe.suggestedSellingPrice ?? "").toString(),
       isActive: recipe.isActive ?? true,
       prepTime: recipe.prepTime.toString(),
       instructions: recipe.instructions,
@@ -327,6 +355,11 @@ export function RecipeBOM() {
   };
 
   const handleDeleteRecipe = (id: string) => {
+    if (!isAdmin) {
+      alert("Only admin users can delete recipes.");
+      return;
+    }
+
     if (confirm("Are you sure you want to delete this recipe?")) {
       setRecipes(recipes.filter(r => r.id !== id));
     }
@@ -395,6 +428,7 @@ export function RecipeBOM() {
       servings: "",
       yieldPercentage: "100",
       targetFoodCost: "35",
+      sellingPrice: "",
       isActive: true,
       prepTime: "",
       instructions: "",
@@ -413,7 +447,7 @@ export function RecipeBOM() {
     { label: "Total Recipes", value: recipes.length, color: "text-blue-600" },
     { label: "Active Menu Items", value: recipes.filter(r => r.isActive ?? true).length, color: "text-purple-600" },
     { label: "Avg Cost/Serving", value: formatMoney(recipes.length ? recipes.reduce((sum, r) => sum + r.costPerServing, 0) / recipes.length : 0), color: "text-green-600" },
-    { label: "Avg Suggested Price", value: formatMoney(recipes.length ? recipes.reduce((sum, r) => sum + (r.suggestedSellingPrice || 0), 0) / recipes.length : 0), color: "text-orange-600" },
+    { label: "Avg Menu Price", value: formatMoney(recipes.length ? recipes.reduce((sum, r) => sum + (r.sellingPrice ?? r.suggestedSellingPrice ?? 0), 0) / recipes.length : 0), color: "text-orange-600" },
   ];
 
   return (
@@ -422,15 +456,21 @@ export function RecipeBOM() {
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">Recipe & BOM</h1>
-          <p className="text-muted-foreground">Manage recipes, ingredients, and calculate costs</p>
+          <p className="text-muted-foreground">
+            {isAdmin
+              ? "Manage recipes, ingredient costs, and menu pricing"
+              : "View recipe costs, menu prices, and scaling"}
+          </p>
         </div>
-        <button
-          onClick={handleOpenCreateModal}
-          className="mt-4 md:mt-0 px-6 py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-2xl hover:shadow-lg hover:shadow-primary/30 transition-all duration-200 flex items-center gap-2"
-        >
-          <Plus className="w-5 h-5" />
-          Create Recipe
-        </button>
+        {isAdmin && (
+          <button
+            onClick={handleOpenCreateModal}
+            className="mt-4 md:mt-0 px-6 py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-2xl hover:shadow-lg hover:shadow-primary/30 transition-all duration-200 flex items-center gap-2"
+          >
+            <Plus className="w-5 h-5" />
+            Create Recipe
+          </button>
+        )}
       </div>
 
       {/* Stats */}
@@ -530,8 +570,8 @@ export function RecipeBOM() {
                   <p className="text-sm font-semibold text-foreground">{formatMoney(calculateRecipeYieldAdjustedCost(recipe))}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Suggested Price</p>
-                  <p className="text-sm font-semibold text-foreground">{formatMoney(recipe.suggestedSellingPrice || 0)}</p>
+                  <p className="text-xs text-muted-foreground">Menu Price</p>
+                  <p className="text-sm font-semibold text-foreground">{formatMoney(recipe.sellingPrice ?? recipe.suggestedSellingPrice ?? 0)}</p>
                 </div>
               </div>
             </div>
@@ -544,18 +584,24 @@ export function RecipeBOM() {
                 <Calculator className="w-4 h-4" />
                 View & Scale
               </button>
-              <button
-                onClick={() => handleEditRecipe(recipe)}
-                className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors"
-              >
-                <Edit className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => handleDeleteRecipe(recipe.id)}
-                className="px-4 py-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {isAdmin && (
+                <>
+                  <button
+                    onClick={() => handleEditRecipe(recipe)}
+                    className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors"
+                    title="Edit recipe and pricing"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteRecipe(recipe.id)}
+                    className="px-4 py-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors"
+                    title="Delete recipe"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </>
+              )}
             </div>
           </div>
         ))}
@@ -692,6 +738,25 @@ export function RecipeBOM() {
                     className="w-full px-4 py-3 text-sm bg-input-background border border-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
                     required
                   />
+                  <p className="mt-1 text-[11px] text-muted-foreground">Used to compute the suggested price from current ingredient cost.</p>
+                </div>
+
+                <div>
+                  <label htmlFor="sellingPrice" className="block text-sm mb-2 text-foreground font-medium">
+                    Menu Selling Price
+                  </label>
+                  <input
+                    id="sellingPrice"
+                    name="sellingPrice"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={newRecipe.sellingPrice}
+                    onChange={handleInputChange}
+                    placeholder={formatMoney(calculateSuggestedSellingPrice())}
+                    className="w-full px-4 py-3 text-sm bg-input-background border border-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">Leave blank to use the suggested price; edit this when the client wants a different menu price.</p>
                 </div>
 
                 <div>
@@ -724,6 +789,9 @@ export function RecipeBOM() {
 
               <div className="border-t border-border pt-6">
                 <h3 className="text-lg font-semibold text-foreground mb-4">Add Ingredients</h3>
+                <p className="mb-4 text-xs text-muted-foreground">
+                  Ingredient unit cost is pulled from inventory so recipe cost follows the latest item unit cost.
+                </p>
 
                 <div className="grid grid-cols-5 gap-3 mb-4">
                   <div className="col-span-2">
@@ -861,6 +929,10 @@ export function RecipeBOM() {
                   <p className="text-sm font-semibold text-foreground">{formatMoney(calculateSuggestedSellingPrice())}</p>
                 </div>
                 <div>
+                  <p className="text-xs text-muted-foreground">Final menu price</p>
+                  <p className="text-sm font-semibold text-foreground">{formatMoney(calculateMenuSellingPrice())}</p>
+                </div>
+                <div>
                   <p className="text-xs text-muted-foreground">Gross margin</p>
                   <p className="text-sm font-semibold text-foreground">{formatMoney(calculateGrossMargin())} ({calculateGrossMarginPercent().toFixed(1)}%)</p>
                 </div>
@@ -970,8 +1042,8 @@ export function RecipeBOM() {
                   <p className="text-lg font-bold text-foreground">{selectedRecipe.ingredients.length}</p>
                 </div>
                 <div className="bg-muted/30 rounded-xl p-4">
-                  <p className="text-xs text-muted-foreground mb-1">Suggested Price</p>
-                  <p className="text-lg font-bold text-foreground">{formatMoney(selectedRecipe.suggestedSellingPrice || 0)}</p>
+                  <p className="text-xs text-muted-foreground mb-1">Menu Price</p>
+                  <p className="text-lg font-bold text-foreground">{formatMoney(selectedRecipe.sellingPrice ?? selectedRecipe.suggestedSellingPrice ?? 0)}</p>
                 </div>
                 <div className="bg-muted/30 rounded-xl p-4">
                   <p className="text-xs text-muted-foreground mb-1">Target Food Cost</p>

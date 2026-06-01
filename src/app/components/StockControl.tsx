@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Package, Search, TrendingDown, TrendingUp, AlertCircle, RefreshCw, Download, BarChart3, Calendar, Clock } from "lucide-react";
 import { readLocalStorage } from "../lib/localStorage";
-import { getDaysUntilExpiry, getInventoryProducts, getStockStatus, splitCategory } from "../lib/inventoryLogic";
+import { getDaysUntilExpiry, getInventoryProducts, getStockStatus, splitCategory, StockStatus } from "../lib/inventoryLogic";
 
 type StockItem = {
   id: string;
@@ -13,7 +13,7 @@ type StockItem = {
   reorderPoint: number;
   unitCost: number;
   totalValue: number;
-  status: "healthy" | "low" | "critical" | "overstock";
+  status: StockStatus;
   turnoverRate: number | null;
   movementQuantity: number;
   classification: "A" | "B" | "C";
@@ -132,7 +132,7 @@ export function StockControl() {
     .filter((item) => item.daysUntilExpiry <= 7)
     .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
 
-  const lowStockItems = stockItems.filter(item => item.status === "low" || item.status === "critical");
+  const lowStockItems = stockItems.filter(item => item.status === "out-of-stock" || item.status === "critical" || item.status === "low");
 
   const filteredControlItems = stockItems.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -154,14 +154,24 @@ export function StockControl() {
 
   const getStatusBadge = (status: string) => {
     const styles = {
+      "out-of-stock": "bg-black text-white border-black",
       healthy: "bg-green-100 text-green-700 border-green-200",
-      low: "bg-yellow-100 text-yellow-700 border-yellow-200",
+      medium: "bg-yellow-100 text-yellow-800 border-yellow-200",
+      low: "bg-orange-100 text-orange-700 border-orange-200",
       critical: "bg-red-100 text-red-700 border-red-200",
       overstock: "bg-blue-100 text-blue-700 border-blue-200",
     };
+    const labels = {
+      "out-of-stock": "Out of Stock",
+      healthy: "Healthy Stock",
+      medium: "Medium Stock",
+      low: "Low Stock",
+      critical: "Critical Stock",
+      overstock: "Overstock",
+    };
     return (
       <span className={`px-3 py-1 rounded-full text-xs font-medium border ${styles[status as keyof typeof styles]}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+        {labels[status as keyof typeof labels]}
       </span>
     );
   };
@@ -225,8 +235,11 @@ export function StockControl() {
 
   const stats = [
     { label: "Total Stock Value", value: `₱${stockItems.reduce((sum, item) => sum + item.totalValue, 0).toLocaleString()}`, icon: Package, color: "from-blue-500 to-cyan-500" },
-    { label: "Critical Items", value: stockItems.filter(i => i.status === "critical").length, icon: AlertCircle, color: "from-red-500 to-rose-500" },
-    { label: "Low Stock Items", value: stockItems.filter(i => i.status === "low").length, icon: TrendingDown, color: "from-yellow-500 to-orange-500" },
+    { label: "Out of Stock", value: stockItems.filter(i => i.status === "out-of-stock").length, icon: AlertCircle, color: "from-black to-zinc-700" },
+    { label: "Critical Stock", value: stockItems.filter(i => i.status === "critical").length, icon: AlertCircle, color: "from-red-500 to-rose-500" },
+    { label: "Low Stock", value: stockItems.filter(i => i.status === "low").length, icon: TrendingDown, color: "from-orange-500 to-amber-500" },
+    { label: "Medium Stock", value: stockItems.filter(i => i.status === "medium").length, icon: BarChart3, color: "from-yellow-500 to-amber-400" },
+    { label: "Healthy Stock", value: stockItems.filter(i => i.status === "healthy").length, icon: Package, color: "from-green-500 to-emerald-500" },
     { label: "Expiring Soon", value: expiryItems.filter(i => i.daysUntilExpiry <= 3).length, icon: Calendar, color: "from-orange-500 to-red-500" },
   ];
 
@@ -315,7 +328,7 @@ export function StockControl() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-7 gap-6 mb-8">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
           return (
@@ -400,9 +413,11 @@ export function StockControl() {
                 className="px-4 py-3 bg-input-background border border-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all appearance-none cursor-pointer"
               >
                 <option value="all">All Status</option>
-                <option value="healthy">Healthy</option>
-                <option value="low">Low Stock</option>
-                <option value="critical">Critical</option>
+                <option value="out-of-stock">Out of Stock</option>
+                <option value="critical">Critical Stock (1% - 10%)</option>
+                <option value="low">Low Stock (11% - 30%)</option>
+                <option value="medium">Medium Stock (31% - 70%)</option>
+                <option value="healthy">Healthy Stock (71% - 100%)</option>
                 <option value="overstock">Overstock</option>
               </select>
             </>
@@ -476,7 +491,7 @@ export function StockControl() {
               <div
                 key={item.id}
                 className={`bg-card rounded-2xl p-6 shadow-sm border-2 ${
-                  item.status === "critical" ? "border-red-300" : "border-yellow-300"
+                  item.status === "out-of-stock" ? "border-black" : item.status === "critical" ? "border-red-300" : "border-orange-300"
                 }`}
               >
                 <div className="flex items-start justify-between">
@@ -497,7 +512,7 @@ export function StockControl() {
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground mb-1">Current Stock</p>
-                        <p className="text-sm font-bold text-red-600">{item.currentStock}</p>
+                        <p className={`text-sm font-bold ${item.status === "out-of-stock" ? "text-black" : item.status === "critical" ? "text-red-600" : "text-orange-600"}`}>{item.currentStock}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground mb-1">Min Stock</p>
@@ -521,7 +536,7 @@ export function StockControl() {
                       </div>
                     </div>
                   </div>
-                  <AlertCircle className={`w-8 h-8 ${item.status === "critical" ? "text-red-500" : "text-yellow-500"}`} />
+                  <AlertCircle className={`w-8 h-8 ${item.status === "out-of-stock" ? "text-black" : item.status === "critical" ? "text-red-500" : "text-orange-500"}`} />
                 </div>
               </div>
             ))

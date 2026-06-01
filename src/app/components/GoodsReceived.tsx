@@ -121,6 +121,16 @@ const INSPECTION_CRITERIA: Array<{ key: InspectionCriterionKey; label: string; d
   { key: "packaging", label: "Packaging Integrity", description: "Seals, tears, leaks, contamination risk" },
 ];
 
+const NOT_RECEIVED_QC_TOTAL = 5;
+
+const INSPECTION_SHORT_LABELS: Record<InspectionCriterionKey, string> = {
+  appearance: "Appearance",
+  quantity: "Quantity",
+  temperature: "Temp",
+  expiration: "Expiry",
+  packaging: "Packaging",
+};
+
 const findInventoryProduct = (products: InventoryProduct[], item: ReceivedItem) => {
   if (item.inventoryId) {
     const byInventoryId = products.find((product) => product.id === item.inventoryId);
@@ -145,16 +155,56 @@ const findInventoryProduct = (products: InventoryProduct[], item: ReceivedItem) 
   );
 };
 
-const formatQualityScores = (scores?: Partial<Record<InspectionCriterionKey, QualityCriterionScore>>) => {
-  if (!scores) return "Not scored";
+const getAcceptedQuantity = (item: ReceivedItem) => item.acceptedQuantity ?? item.quantity;
 
-  return INSPECTION_CRITERIA
-    .map((criterion) => {
-      const score = scores[criterion.key];
-      return score ? `${criterion.label}: ${score.passed}/${score.total}` : "";
-    })
-    .filter(Boolean)
-    .join(" | ") || "Not scored";
+const buildNotReceivedScores = () => {
+  return INSPECTION_CRITERIA.reduce((scores, criterion) => ({
+    ...scores,
+    [criterion.key]: {
+      passed: 0,
+      total: NOT_RECEIVED_QC_TOTAL,
+      remarks: "Item not received",
+    },
+  }), {} as Record<InspectionCriterionKey, QualityCriterionScore>);
+};
+
+const getItemQualityStatus = (item: ReceivedItem) => {
+  const acceptedQuantity = getAcceptedQuantity(item);
+  const rejectedQuantity = item.rejectedQuantity ?? Math.max(item.quantity - acceptedQuantity, 0);
+  const status = item.qualityStatus || (acceptedQuantity <= 0 ? "rejected" : rejectedQuantity > 0 ? "partial" : "accepted");
+
+  if (status === "accepted") {
+    return {
+      label: "Accepted",
+      className: "bg-green-100 text-green-700 border-green-200",
+    };
+  }
+
+  if (status === "partial") {
+    return {
+      label: "Partial",
+      className: "bg-orange-100 text-orange-700 border-orange-200",
+    };
+  }
+
+  return {
+    label: "Rejected",
+    className: "bg-red-100 text-red-700 border-red-200",
+  };
+};
+
+const getQualityScoreTone = (score?: QualityCriterionScore) => {
+  if (!score || score.total <= 0) return "bg-muted text-muted-foreground border-border";
+  const ratio = score.passed / score.total;
+  if (ratio >= 1) return "bg-green-50 text-green-700 border-green-200";
+  if (ratio >= 0.8) return "bg-yellow-50 text-yellow-800 border-yellow-200";
+  return "bg-red-50 text-red-700 border-red-200";
+};
+
+const getPayableItemTotal = (item: ReceivedItem) => getAcceptedQuantity(item) * item.unitPrice;
+
+const getPayableTotal = (items: ReceivedItem[] = []) => {
+  return items.reduce((sum, item) => sum + getPayableItemTotal(item), 0);
 };
 
 export function GoodsReceived() {
@@ -247,6 +297,19 @@ export function GoodsReceived() {
   const handleItemCheck = (index: number) => {
     const item = selectedItem?.receivedItems?.[index];
     const isChecked = !checkedItems[index];
+    const nextCriteriaScores = { ...itemCriteriaScores };
+
+    if (!isChecked) {
+      nextCriteriaScores[index] = {};
+      INSPECTION_CRITERIA.forEach((criterion) => {
+        nextCriteriaScores[index][criterion.key] = {
+          passed: "0",
+          total: String(NOT_RECEIVED_QC_TOTAL),
+          remarks: "Item not received",
+        };
+      });
+    }
+
     setCheckedItems({
       ...checkedItems,
       [index]: isChecked,
@@ -255,6 +318,7 @@ export function GoodsReceived() {
       ...acceptedQuantities,
       [index]: isChecked ? String(item?.quantity || 0) : "0",
     });
+    setItemCriteriaScores(nextCriteriaScores);
   };
 
   const handleExpiryDateChange = (index: number, value: string) => {
@@ -404,13 +468,14 @@ export function GoodsReceived() {
         : (Number(acceptedQuantities[index]) || 0) === 0
           ? "rejected"
           : (Number(acceptedQuantities[index]) || 0) < item.quantity
-            ? "partial"
+          ? "partial"
             : "accepted",
     }));
+    const payableTotal = decision === "reject" ? 0 : getPayableTotal(receivedItemsWithExpiry);
 
     setReceivedGoods(receivedGoods.map(item =>
       item.id === selectedItem.id
-        ? { ...item, status: newStatus, notes: newNotes, receivedItems: receivedItemsWithExpiry, qualityCheck: qualityCheckCriteria as any }
+        ? { ...item, status: newStatus, notes: newNotes, receivedItems: receivedItemsWithExpiry, totalValue: payableTotal }
         : item
     ));
 
@@ -639,7 +704,7 @@ export function GoodsReceived() {
                 <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Supplier</th>
                 <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Received Date</th>
                 <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Items</th>
-                <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Total Value</th>
+                <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Payable Total</th>
                 <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Received By</th>
                 <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Status</th>
                 <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Actions</th>
@@ -657,7 +722,7 @@ export function GoodsReceived() {
                   <td className="px-6 py-4 text-foreground">{item.supplier}</td>
                   <td className="px-6 py-4 text-muted-foreground">{item.receivedDate}</td>
                   <td className="px-6 py-4 text-foreground">{item.items}</td>
-                  <td className="px-6 py-4 text-foreground font-medium">${item.totalValue.toLocaleString()}</td>
+                  <td className="px-6 py-4 text-foreground font-medium">₱{item.totalValue.toLocaleString()}</td>
                   <td className="px-6 py-4 text-muted-foreground">{item.receivedBy}</td>
                   <td className="px-6 py-4">{getStatusBadge(item.status)}</td>
                   <td className="px-6 py-4">
@@ -788,6 +853,9 @@ export function GoodsReceived() {
                               </p>
                               <p className="text-xs text-muted-foreground">
                                 Accepted: {Number(acceptedQuantities[index]) || 0}/{item.quantity} {item.unit} | Rejected/return: {item.quantity - Math.min(Math.max(Number(acceptedQuantities[index]) || 0, 0), item.quantity)} {item.unit}
+                              </p>
+                              <p className="text-xs font-medium text-green-700">
+                                Payable: ₱{(Math.min(Math.max(Number(acceptedQuantities[index]) || 0, 0), item.quantity) * item.unitPrice).toFixed(2)}
                               </p>
                             </div>
                             {checkedItems[index] && (
@@ -1001,8 +1069,8 @@ export function GoodsReceived() {
                     <p className="text-foreground">{viewItem.items} items</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground mb-1">Total Value</p>
-                    <p className="text-2xl font-bold text-primary">${viewItem.totalValue.toLocaleString()}</p>
+                    <p className="text-sm text-muted-foreground mb-1">Payable Total</p>
+                    <p className="text-2xl font-bold text-primary">₱{viewItem.totalValue.toLocaleString()}</p>
                   </div>
                 </div>
               </div>
@@ -1012,7 +1080,7 @@ export function GoodsReceived() {
                 <div className="border-t border-border pt-6">
                   <h3 className="text-lg font-semibold text-foreground mb-4">Received Items</h3>
                   <div className="overflow-x-auto rounded-xl border border-border bg-muted/30">
-                    <table className="min-w-[1500px] w-full table-fixed">
+                    <table className="min-w-[1580px] w-full table-fixed">
                       <thead className="bg-muted/50 border-b border-border">
                         <tr>
                           <th className="w-36 px-4 py-3 text-left text-sm font-medium text-foreground">Product Name</th>
@@ -1022,7 +1090,7 @@ export function GoodsReceived() {
                           <th className="w-20 px-4 py-3 text-left text-sm font-medium text-foreground">Unit</th>
                           <th className="w-32 px-4 py-3 text-left text-sm font-medium text-foreground">Expiry</th>
                           <th className="w-44 px-4 py-3 text-left text-sm font-medium text-foreground">Storage Temp</th>
-                          <th className="w-80 px-4 py-3 text-left text-sm font-medium text-foreground">QC Scores</th>
+                          <th className="w-96 px-4 py-3 text-left text-sm font-medium text-foreground">QC Result</th>
                           <th className="w-48 px-4 py-3 text-left text-sm font-medium text-foreground">Remarks</th>
                           <th className="w-28 px-4 py-3 text-right text-sm font-medium text-foreground">Unit Price</th>
                           <th className="w-32 px-4 py-3 text-left text-sm font-medium text-foreground">Condition</th>
@@ -1030,7 +1098,10 @@ export function GoodsReceived() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {viewItem.receivedItems.map((item, index) => (
+                        {viewItem.receivedItems.map((item, index) => {
+                          const qualityStatus = getItemQualityStatus(item);
+
+                          return (
                           <tr key={index} className="hover:bg-muted/20">
                             <td className="px-4 py-3 text-foreground whitespace-normal break-words">{item.productName}</td>
                             <td className="px-4 py-3 text-right text-foreground">{item.quantity}</td>
@@ -1039,23 +1110,53 @@ export function GoodsReceived() {
                             <td className="px-4 py-3 text-left text-foreground">{item.unit}</td>
                             <td className="px-4 py-3 text-left text-foreground">{item.expiryDate || "Not set"}</td>
                             <td className="px-4 py-3 text-left text-foreground whitespace-normal break-words">{item.storageTemperature || "Not set"}</td>
-                            <td className="px-4 py-3 text-left text-xs text-foreground whitespace-normal break-words">{formatQualityScores(item.qualityScores)}</td>
-                            <td className="px-4 py-3 text-left text-foreground whitespace-normal break-words">{item.qualityRemarks || item.qualityStatus || "N/A"}</td>
-                            <td className="px-4 py-3 text-right text-foreground">${item.unitPrice.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-left">
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${qualityStatus.className}`}>
+                                    {qualityStatus.label}
+                                  </span>
+                                  <span className="text-[11px] text-muted-foreground">
+                                    {getAcceptedQuantity(item)} / {item.quantity} accepted
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  {INSPECTION_CRITERIA.map((criterion) => {
+                                    const score = item.qualityScores?.[criterion.key];
+
+                                    return (
+                                      <div
+                                        key={criterion.key}
+                                        className={`rounded-lg border px-2 py-1 text-[11px] leading-tight ${getQualityScoreTone(score)}`}
+                                        title={score?.remarks || criterion.label}
+                                      >
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="truncate">{INSPECTION_SHORT_LABELS[criterion.key]}</span>
+                                          <span className="font-semibold">{score ? `${score.passed}/${score.total}` : "N/A"}</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-left text-foreground whitespace-normal break-words">{item.qualityRemarks || "N/A"}</td>
+                            <td className="px-4 py-3 text-right text-foreground">₱{item.unitPrice.toFixed(2)}</td>
                             <td className="px-4 py-3 text-foreground">{item.condition}</td>
                             <td className="px-4 py-3 text-right font-medium text-foreground">
-                              ${(item.quantity * item.unitPrice).toFixed(2)}
+                              ₱{getPayableItemTotal(item).toFixed(2)}
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                       <tfoot className="bg-muted/50 border-t border-border">
                         <tr>
-                          <td colSpan={10} className="px-4 py-3 text-right font-semibold text-foreground">
-                            Grand Total:
+                          <td colSpan={11} className="px-4 py-3 text-right font-semibold text-foreground">
+                            Payable Grand Total:
                           </td>
                           <td className="px-4 py-3 text-right text-xl font-bold text-primary">
-                            ${viewItem.totalValue.toFixed(2)}
+                            ₱{viewItem.totalValue.toFixed(2)}
                           </td>
                         </tr>
                       </tfoot>
@@ -1065,7 +1166,7 @@ export function GoodsReceived() {
               )}
 
               {/* Quality Check Results */}
-              {viewItem.qualityCheck && (
+              {false && viewItem.qualityCheck && (
                 <div className="border-t border-border pt-6">
                   <h3 className="text-lg font-semibold text-foreground mb-4">Quality Check Results</h3>
                   <div className="grid grid-cols-2 gap-4">

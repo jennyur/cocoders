@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { MapPin, Search, Package, TrendingDown, AlertCircle, Building2, BarChart3, Eye, ArrowLeftRight } from "lucide-react";
-import { getInventoryProducts, getStockStatus, splitCategory } from "../lib/inventoryLogic";
+import { getInventoryProducts, getStockStatus, splitCategory, StockStatus } from "../lib/inventoryLogic";
 
 type LocationStock = {
   location: string;
   currentStock: number;
   minStock: number;
   maxStock: number;
-  status: "healthy" | "low" | "critical" | "overstock";
+  status: StockStatus;
 };
 
 type Product = {
@@ -153,7 +153,7 @@ export function MultiLocation() {
       manager: "Unassigned",
       totalProducts: productsAtLocation.length,
       lowStockItems: stockStatuses.filter(status => status === "low").length,
-      criticalItems: stockStatuses.filter(status => status === "critical").length,
+      criticalItems: stockStatuses.filter(status => status === "out-of-stock" || status === "critical").length,
       totalValue: productsAtLocation.reduce((sum, item) => sum + item.stock * item.price, 0),
     };
   });
@@ -182,14 +182,24 @@ export function MultiLocation() {
 
   const getStatusBadge = (status: string) => {
     const styles = {
+      "out-of-stock": "bg-black text-white border-black",
       healthy: "bg-green-100 text-green-700 border-green-200",
-      low: "bg-yellow-100 text-yellow-700 border-yellow-200",
+      medium: "bg-yellow-100 text-yellow-800 border-yellow-200",
+      low: "bg-orange-100 text-orange-700 border-orange-200",
       critical: "bg-red-100 text-red-700 border-red-200",
       overstock: "bg-blue-100 text-blue-700 border-blue-200",
     };
+    const labels = {
+      "out-of-stock": "Out of Stock",
+      healthy: "Healthy Stock",
+      medium: "Medium Stock",
+      low: "Low Stock",
+      critical: "Critical Stock",
+      overstock: "Overstock",
+    };
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium border ${styles[status as keyof typeof styles]}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+        {labels[status as keyof typeof labels]}
       </span>
     );
   };
@@ -210,8 +220,8 @@ export function MultiLocation() {
   const stats = [
     { label: "Total Locations", value: locations.length, icon: Building2, color: "from-blue-500 to-cyan-500" },
     { label: "Total Products", value: products.length, icon: Package, color: "from-purple-500 to-indigo-500" },
-    { label: "Critical Alerts", value: locations.reduce((sum, loc) => sum + loc.criticalItems, 0), icon: AlertCircle, color: "from-red-500 to-rose-500" },
-    { label: "Low Stock Items", value: locations.reduce((sum, loc) => sum + loc.lowStockItems, 0), icon: TrendingDown, color: "from-yellow-500 to-orange-500" },
+    { label: "Critical/Out Alerts", value: locations.reduce((sum, loc) => sum + loc.criticalItems, 0), icon: AlertCircle, color: "from-red-500 to-zinc-800" },
+    { label: "Low Stock Items", value: locations.reduce((sum, loc) => sum + loc.lowStockItems, 0), icon: TrendingDown, color: "from-orange-500 to-amber-500" },
   ];
 
   return (
@@ -296,9 +306,11 @@ export function MultiLocation() {
               className="px-3 py-2 bg-input-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all appearance-none cursor-pointer text-sm"
             >
               <option value="all">All Status</option>
-              <option value="healthy">Healthy</option>
-              <option value="low">Low Stock</option>
-              <option value="critical">Critical</option>
+              <option value="out-of-stock">Out of Stock</option>
+              <option value="critical">Critical Stock (1% - 10%)</option>
+              <option value="low">Low Stock (11% - 30%)</option>
+              <option value="medium">Medium Stock (31% - 70%)</option>
+              <option value="healthy">Healthy Stock (71% - 100%)</option>
               <option value="overstock">Overstock</option>
             </select>
           </div>
@@ -421,17 +433,17 @@ export function MultiLocation() {
               </div>
 
               <div className="flex gap-2">
-                <div className="flex-1 bg-yellow-50 border border-yellow-200 rounded-lg p-2">
+                <div className="flex-1 bg-orange-50 border border-orange-200 rounded-lg p-2">
                   <div className="flex items-center gap-1 mb-1">
-                    <TrendingDown className="w-3 h-3 text-yellow-600" />
-                    <p className="text-xs text-yellow-700 font-medium">Low Stock</p>
+                    <TrendingDown className="w-3 h-3 text-orange-600" />
+                    <p className="text-xs text-orange-700 font-medium">Low Stock</p>
                   </div>
-                  <p className="text-lg font-bold text-yellow-700">{location.lowStockItems}</p>
+                  <p className="text-lg font-bold text-orange-700">{location.lowStockItems}</p>
                 </div>
                 <div className="flex-1 bg-red-50 border border-red-200 rounded-lg p-2">
                   <div className="flex items-center gap-1 mb-1">
                     <AlertCircle className="w-3 h-3 text-red-600" />
-                    <p className="text-xs text-red-700 font-medium">Critical</p>
+                    <p className="text-xs text-red-700 font-medium">Critical/Out</p>
                   </div>
                   <p className="text-lg font-bold text-red-700">{location.criticalItems}</p>
                 </div>

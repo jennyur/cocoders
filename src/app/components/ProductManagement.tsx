@@ -5,6 +5,8 @@ import { defaultCategoryHierarchy, InventoryProduct } from "../lib/inventoryLogi
 
 type GlobalProduct = {
   id: string;
+  inventoryId?: number;
+  sku?: string;
   name: string;
   category?: string;
   subCategory?: string;
@@ -92,6 +94,9 @@ export function ProductManagement() {
     products.forEach((product) => {
       const key = normalizeName(product.name);
       const categoryParts = splitCategory(product.category);
+      const linkedGlobalIds = globalProducts
+        .filter((globalProduct) => globalProduct.inventoryId === product.id)
+        .map((globalProduct) => globalProduct.id);
       const current = grouped.get(key) || {
         key,
         name: product.name,
@@ -99,7 +104,7 @@ export function ProductManagement() {
         subCategory: categoryParts.subCategory,
         unit: product.unit || "pcs",
         inventoryIds: [],
-        globalIds: [],
+        globalIds: linkedGlobalIds,
         stock: 0,
         maxStock: product.maxStock || 0,
         minStock: product.minStock ?? Math.ceil((product.maxStock || 0) * 0.25),
@@ -107,31 +112,11 @@ export function ProductManagement() {
         supplierNames: [],
       };
       current.inventoryIds.push(product.id);
+      linkedGlobalIds.forEach((id) => {
+        if (!current.globalIds.includes(id)) current.globalIds.push(id);
+      });
       current.stock += product.stock || 0;
       current.maxStock = Math.max(current.maxStock, product.maxStock || 0);
-      grouped.set(key, current);
-    });
-
-    globalProducts.forEach((product) => {
-      const key = normalizeName(product.name);
-      const current = grouped.get(key) || {
-        key,
-        name: product.name,
-        category: product.category || "",
-        subCategory: product.subCategory || "",
-        unit: product.unit || "pcs",
-        inventoryIds: [],
-        globalIds: [],
-        stock: 0,
-        maxStock: 0,
-        minStock: 0,
-        reorderPoint: 0,
-        supplierNames: [],
-      };
-      current.globalIds.push(product.id);
-      current.category = current.category || product.category || "";
-      current.subCategory = current.subCategory || product.subCategory || "";
-      current.unit = current.unit || product.unit || "pcs";
       grouped.set(key, current);
     });
 
@@ -191,7 +176,7 @@ export function ProductManagement() {
       purchaseOrders.map((order) => ({
         ...order,
         orderItems: order.orderItems.map((item) =>
-          oldNameSet.has(normalizeName(item.productName)) || (item.productId && oldIdSet.has(item.productId))
+          item.productId && oldIdSet.has(item.productId)
             ? { ...item, productName: nextProduct.name, category: nextProduct.category, subCategory: nextProduct.subCategory, unit: nextProduct.unit }
             : item
         ),
@@ -239,7 +224,7 @@ export function ProductManagement() {
 
     setGlobalProducts(
       globalProducts.map((product) =>
-        selectedProduct.globalIds.includes(product.id) || normalizeName(product.name) === selectedProduct.key
+        selectedProduct.globalIds.includes(product.id) || (product.inventoryId !== undefined && selectedProduct.inventoryIds.includes(product.inventoryId))
           ? { ...product, name: next.name, category: next.category, subCategory: next.subCategory, unit: next.unit }
           : product
       )
@@ -291,9 +276,9 @@ export function ProductManagement() {
 
     setGlobalProducts(
       globalProducts
-        .filter((product) => !(duplicate.globalIds.includes(product.id) || normalizeName(product.name) === duplicate.key))
+        .filter((product) => !(duplicate.globalIds.includes(product.id) || (product.inventoryId !== undefined && duplicate.inventoryIds.includes(product.inventoryId))))
         .map((product) =>
-          selectedProduct.globalIds.includes(product.id) || normalizeName(product.name) === selectedProduct.key
+          selectedProduct.globalIds.includes(product.id) || (product.inventoryId !== undefined && selectedProduct.inventoryIds.includes(product.inventoryId))
             ? { ...product, name: next.name, category: next.category, subCategory: next.subCategory, unit: next.unit }
             : product
         )
@@ -335,16 +320,16 @@ export function ProductManagement() {
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Product Management</h1>
-          <p className="text-sm text-muted-foreground">Admin maintenance for product master data, supplier links, duplicates, and reorder settings.</p>
+          <p className="text-sm text-muted-foreground">Admin maintenance for products that already passed receiving/QC and exist in inventory.</p>
         </div>
       </div>
 
       <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
         <div className="flex items-center gap-2 font-semibold">
           <AlertTriangle className="h-5 w-5" />
-          Changes affect all linked PO and inventory records
+          Changes affect received inventory records
         </div>
-        <p className="mt-2 text-sm">This module is not for daily operations. Use it only to fix product data, merge duplicates, assign suppliers, set reorder levels, and clean PO automation data.</p>
+        <p className="mt-2 text-sm">Products still waiting for receiving or quality check are kept out of this list. Use this only to fix accepted inventory items, merge duplicates, assign suppliers, and set reorder levels.</p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[420px_1fr]">

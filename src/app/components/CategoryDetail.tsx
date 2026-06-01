@@ -101,7 +101,7 @@ export function CategoryDetail() {
     } else if (percentage <= 10) {
       return {
         color: "bg-red-100 text-red-700 border-red-200",
-        label: "Critical Low",
+        label: "Critical Stock",
         percentage: Math.round(percentage),
         barColor: "bg-red-500"
       };
@@ -112,12 +112,19 @@ export function CategoryDetail() {
         percentage: Math.round(percentage),
         barColor: "bg-orange-500"
       };
-    } else {
+    } else if (percentage <= 70) {
       return {
-        color: "bg-yellow-100 text-yellow-700 border-yellow-200",
-        label: "Average",
+        color: "bg-yellow-100 text-yellow-800 border-yellow-200",
+        label: "Medium Stock",
         percentage: Math.round(percentage),
         barColor: "bg-yellow-500"
+      };
+    } else {
+      return {
+        color: "bg-green-100 text-green-700 border-green-200",
+        label: "Healthy Stock",
+        percentage: Math.round(percentage),
+        barColor: "bg-green-500"
       };
     }
   };
@@ -133,9 +140,13 @@ export function CategoryDetail() {
       const pct = (i.stock / i.maxStock) * 100;
       return pct > 10 && pct <= 30;
     }).length,
-    average: filteredItems.filter(i => {
+    medium: filteredItems.filter(i => {
       const pct = (i.stock / i.maxStock) * 100;
-      return pct > 30;
+      return pct > 30 && pct <= 70;
+    }).length,
+    healthy: filteredItems.filter(i => {
+      const pct = (i.stock / i.maxStock) * 100;
+      return pct > 70 && pct <= 100;
     }).length,
   };
 
@@ -157,7 +168,7 @@ export function CategoryDetail() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-1.5 mb-8">
         <div className="bg-card rounded-2xl p-1.5 shadow-sm border border-border">
           <div className="flex items-center gap-2 mb-2">
             <Package className="w-5 h-5 text-primary" />
@@ -177,7 +188,7 @@ export function CategoryDetail() {
         <div className="bg-card rounded-2xl p-1.5 shadow-sm border border-border">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-5 h-5 rounded-full bg-red-500"></div>
-            <p className="text-sm text-muted-foreground">Critical (≤10%)</p>
+            <p className="text-sm text-muted-foreground">Critical (1-10%)</p>
           </div>
           <p className="text-sm font-bold text-foreground">{stats.critical}</p>
         </div>
@@ -185,7 +196,7 @@ export function CategoryDetail() {
         <div className="bg-card rounded-2xl p-1.5 shadow-sm border border-border">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-5 h-5 rounded-full bg-orange-500"></div>
-            <p className="text-sm text-muted-foreground">Low (≤30%)</p>
+            <p className="text-sm text-muted-foreground">Low (11-30%)</p>
           </div>
           <p className="text-sm font-bold text-foreground">{stats.low}</p>
         </div>
@@ -193,9 +204,17 @@ export function CategoryDetail() {
         <div className="bg-card rounded-2xl p-1.5 shadow-sm border border-border">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-5 h-5 rounded-full bg-yellow-500"></div>
-            <p className="text-sm text-muted-foreground">Average (&gt;30%)</p>
+            <p className="text-sm text-muted-foreground">Medium (31-70%)</p>
           </div>
-          <p className="text-sm font-bold text-foreground">{stats.average}</p>
+          <p className="text-sm font-bold text-foreground">{stats.medium}</p>
+        </div>
+
+        <div className="bg-card rounded-2xl p-1.5 shadow-sm border border-border">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-5 h-5 rounded-full bg-green-500"></div>
+            <p className="text-sm text-muted-foreground">Healthy (71-100%)</p>
+          </div>
+          <p className="text-sm font-bold text-foreground">{stats.healthy}</p>
         </div>
       </div>
 
@@ -260,18 +279,18 @@ export function CategoryDetail() {
 
               {/* Action Indicators */}
               {item.stock === 0 && (
-                <div className="mt-4 p-3 bg-red-50 rounded-2xl flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-red-600" />
-                  <span className="text-sm text-red-700">Reorder immediately</span>
+                <div className="mt-4 p-3 bg-black rounded-2xl flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-white" />
+                  <span className="text-sm text-white">Out of stock</span>
                 </div>
               )}
               {item.stock > 0 && status.percentage <= 10 && (
-                <div className="mt-4 p-3 bg-orange-50 rounded-2xl flex items-center gap-2">
-                  <TrendingDown className="w-4 h-4 text-orange-600" />
-                  <span className="text-sm text-orange-700">Reorder soon</span>
+                <div className="mt-4 p-3 bg-red-50 rounded-2xl flex items-center gap-2">
+                  <TrendingDown className="w-4 h-4 text-red-600" />
+                  <span className="text-sm text-red-700">Critical stock</span>
                 </div>
               )}
-              {status.percentage > 50 && (
+              {status.percentage >= 71 && status.percentage <= 100 && (
                 <div className="mt-4 p-3 bg-green-50 rounded-2xl flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-green-600" />
                   <span className="text-sm text-green-700">Stock healthy</span>

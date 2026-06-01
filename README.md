@@ -1,11 +1,21 @@
+# Inventory system
 
-  # Inventory system
+This inventory system is built as a ReactJS application using Vite.
 
-  This is a code bundle for Inventory system. The original project is available at https://www.figma.com/design/pyDYhcbJgLhPSBwCBi7EI6/Inventory-system.
+The `index.html` file is only the required Vite browser entry shell. The actual application UI, routes, and inventory logic are implemented in React/TypeScript under `src/`, starting from `src/main.tsx` and `src/app/App.tsx`.
 
-  ## Running the code
+Current data persistence uses browser `localStorage` through `src/app/lib/localStorage.ts`, so the modules continue to share the same inventory, purchase order, goods received, POS, transfer, report, and user-management data flow.
 
-  Run `npm i` to install the dependencies.
+## Tech stack
 
-  Run `npm run dev` to start the development server.
-  
+- ReactJS
+- TypeScript
+- Vite
+- React Router
+- localStorage-based prototype data layer
+
+## Running the code
+
+Run `npm i` to install the dependencies.
+
+Run `npm run dev` to start the development server.

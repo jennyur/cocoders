@@ -169,7 +169,7 @@ export function Inventory() {
     if (percentage <= 10) {
       return {
         color: "bg-red-100 text-red-700 border-red-200",
-        label: "Critical Low",
+        label: "Critical Stock",
         textColor: "text-red-600"
       };
     } else if (percentage <= 30) {
@@ -178,16 +178,16 @@ export function Inventory() {
         label: "Low Stock",
         textColor: "text-orange-600"
       };
-    } else if (percentage <= 50) {
+    } else if (percentage <= 70) {
       return {
-        color: "bg-yellow-100 text-yellow-700 border-yellow-200",
+        color: "bg-yellow-100 text-yellow-800 border-yellow-200",
         label: "Medium Stock",
-        textColor: "text-yellow-600"
+        textColor: "text-yellow-700"
       };
     } else {
       return {
         color: "bg-green-100 text-green-700 border-green-200",
-        label: "In Stock",
+        label: "Healthy Stock",
         textColor: "text-green-600"
       };
     }
@@ -217,7 +217,7 @@ export function Inventory() {
         </div>
 
         {/* Stats Row */}
-        <div className="grid grid-cols-5 gap-1.5 mt-2 pt-2 border-t border-border">
+        <div className="grid grid-cols-6 gap-1.5 mt-2 pt-2 border-t border-border">
           <div className="text-center">
             <p className="text-sm font-bold text-foreground">{products.length}</p>
             <p className="text-muted-foreground text-sm">Total</p>
@@ -241,11 +241,18 @@ export function Inventory() {
             <p className="text-muted-foreground text-sm">Low</p>
           </div>
           <div className="text-center">
-            <p className="text-sm font-bold text-yellow-600">{products.filter(p => {
+            <p className="text-sm font-bold text-yellow-700">{products.filter(p => {
               const pct = (p.stock / p.maxStock) * 100;
-              return pct > 30 && pct <= 50;
+              return pct > 30 && pct <= 70;
             }).length}</p>
             <p className="text-muted-foreground text-sm">Medium</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-bold text-green-600">{products.filter(p => {
+              const pct = (p.stock / p.maxStock) * 100;
+              return pct > 70 && pct <= 100;
+            }).length}</p>
+            <p className="text-muted-foreground text-sm">Healthy</p>
           </div>
         </div>
       </div>

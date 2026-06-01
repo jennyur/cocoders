@@ -38,12 +38,16 @@ export function splitCategory(category: string) {
   return { main, sub };
 }
 
-export function getStockStatus(stock: number, maxStock: number): "healthy" | "low" | "critical" | "overstock" {
-  if (stock === 0) return "critical";
+export type StockStatus = "healthy" | "medium" | "low" | "critical" | "out-of-stock" | "overstock";
+
+export function getStockStatus(stock: number, maxStock: number): StockStatus {
+  if (stock <= 0) return "out-of-stock";
   const percentage = maxStock > 0 ? (stock / maxStock) * 100 : 0;
-  if (percentage <= 15) return "critical";
+  if (percentage <= 10) return "critical";
   if (percentage <= 30) return "low";
-  if (percentage >= 110) return "overstock";
+  if (percentage <= 70) return "medium";
+  if (percentage <= 100) return "healthy";
+  if (percentage > 100) return "overstock";
   return "healthy";
 }
 
