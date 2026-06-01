@@ -1,0 +1,79 @@
+import { readLocalStorage } from "./localStorage";
+
+export type InventoryProduct = {
+  id: number;
+  name: string;
+  sku: string;
+  category: string;
+  stock: number;
+  maxStock: number;
+  price: number;
+  expiry: string;
+  location?: string;
+  unit: string;
+};
+
+export const defaultCategoryHierarchy: { [key: string]: string[] } = {
+  "Fruits": ["Citrus Fruits", "Berries", "Tropical Fruits", "Stone Fruits", "Melons"],
+  "Vegetables": ["Leafy Greens", "Root Vegetables", "Cruciferous", "Nightshades", "Squash"],
+  "Meat": ["Poultry", "Beef", "Pork", "Lamb", "Game Meat"],
+  "Seafood": ["Fish", "Shellfish", "Crustaceans", "Mollusks", "Canned Seafood"],
+  "Dairy": ["Milk Products", "Cheese", "Yogurt", "Butter & Cream", "Eggs"],
+  "Bakery": ["Bread", "Pastries", "Cakes", "Cookies", "Muffins"],
+  "Oils & Condiments": ["Cooking Oils", "Vinegars", "Sauces", "Spices", "Seasonings"],
+  "Frozen Foods": ["Frozen Vegetables", "Frozen Fruits", "Frozen Meals", "Ice Cream", "Frozen Seafood"],
+};
+
+export const defaultInventoryProducts: InventoryProduct[] = [];
+
+export function getInventoryProducts() {
+  return readLocalStorage<InventoryProduct[]>("inventory.products", defaultInventoryProducts);
+}
+
+export function splitCategory(category: string) {
+  const [main = "Uncategorized", sub = "General"] = category.split(" > ");
+  return { main, sub };
+}
+
+export function getStockStatus(stock: number, maxStock: number): "healthy" | "low" | "critical" | "overstock" {
+  if (stock === 0) return "critical";
+  const percentage = maxStock > 0 ? (stock / maxStock) * 100 : 0;
+  if (percentage <= 15) return "critical";
+  if (percentage <= 30) return "low";
+  if (percentage >= 110) return "overstock";
+  return "healthy";
+}
+
+export function getDaysUntilExpiry(expiry: string) {
+  const expiryTime = new Date(`${expiry}T00:00:00`).getTime();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.ceil((expiryTime - today.getTime()) / 86400000);
+}
+
+export function isExpiringSoon(product: InventoryProduct) {
+  return getDaysUntilExpiry(product.expiry) <= 7;
+}
+
+export function formatCurrency(value: number) {
+  return `₱${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
+
+export function getInventoryValue(products: InventoryProduct[]) {
+  return products.reduce((sum, product) => sum + product.stock * product.price, 0);
+}
+
+export function getCategoryQuantityData(products: InventoryProduct[]) {
+  const grouped = new Map<string, number>();
+
+  products.forEach((product) => {
+    const { main } = splitCategory(product.category);
+    grouped.set(main, (grouped.get(main) || 0) + product.stock);
+  });
+
+  return Array.from(grouped.entries()).map(([category, value]) => ({
+    id: category.toLowerCase().replace(/\s+/g, "-"),
+    category,
+    value,
+  }));
+}
