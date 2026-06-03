@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Package, Search, TrendingDown, TrendingUp, AlertCircle, RefreshCw, Download, BarChart3, Calendar, Clock } from "lucide-react";
 import { readLocalStorage } from "../lib/localStorage";
-import { getDaysUntilExpiry, getInventoryProducts, getStockStatus, splitCategory, StockStatus } from "../lib/inventoryLogic";
+import { formatQuantity, getDaysUntilExpiry, getInventoryProducts, getStockStatus, splitCategory, StockStatus } from "../lib/inventoryLogic";
 
 type StockItem = {
   id: string;
   name: string;
   category: string;
   currentStock: number;
+  unit: string;
   minStock: number;
   maxStock: number;
   reorderPoint: number;
@@ -29,6 +30,7 @@ type ExpiryItem = {
   location: string;
   expiry: string;
   stock: number;
+  unit: string;
   daysUntilExpiry: number;
 };
 
@@ -101,6 +103,7 @@ export function StockControl() {
       name: product.name,
       category: main,
       currentStock: product.stock,
+      unit: product.unit || "pcs",
       minStock: product.minStock ?? Math.ceil(product.maxStock * 0.25),
       maxStock: product.maxStock,
       reorderPoint: product.reorderPoint ?? Math.ceil(product.maxStock * 0.3),
@@ -126,6 +129,7 @@ export function StockControl() {
         location: product.location || "Unassigned",
         expiry: product.expiry,
         stock: product.stock,
+        unit: product.unit || "pcs",
         daysUntilExpiry: getDaysUntilExpiry(product.expiry),
       };
     })
@@ -262,7 +266,7 @@ export function StockControl() {
       csvContent = "SKU,Product Name,Category,Current Stock,Min Stock,Max Stock,Reorder Point,Unit Cost,Total Value,Status,Recorded Outflow,Turnover Rate,Classification,Location\n";
 
       filteredControlItems.forEach(item => {
-        csvContent += `${item.id},${item.name},${item.category},${item.currentStock},${item.minStock},${item.maxStock},${item.reorderPoint},${item.unitCost.toFixed(2)},${item.totalValue.toFixed(2)},${item.status},${item.movementQuantity},${item.turnoverRate === null ? "N/A" : `${item.turnoverRate}x`},${item.classification},${item.location}\n`;
+        csvContent += `${item.id},${item.name},${item.category},${item.currentStock} ${item.unit},${item.minStock} ${item.unit},${item.maxStock} ${item.unit},${item.reorderPoint} ${item.unit},${item.unitCost.toFixed(2)},${item.totalValue.toFixed(2)},${item.status},${item.movementQuantity} ${item.unit},${item.turnoverRate === null ? "N/A" : `${item.turnoverRate}x`},${item.classification},${item.location}\n`;
       });
 
       filename = "stock_control_report.csv";
@@ -271,7 +275,7 @@ export function StockControl() {
       csvContent = "SKU,Product Name,Category,Current Stock,Min Stock,Reorder Point,Status,Location\n";
 
       filteredLowStockItems.forEach(item => {
-        csvContent += `${item.id},${item.name},${item.category},${item.currentStock},${item.minStock},${item.reorderPoint},${item.status},${item.location}\n`;
+        csvContent += `${item.id},${item.name},${item.category},${item.currentStock} ${item.unit},${item.minStock} ${item.unit},${item.reorderPoint} ${item.unit},${item.status},${item.location}\n`;
       });
 
       filename = "low_stock_alerts.csv";
@@ -280,7 +284,7 @@ export function StockControl() {
       csvContent = "SKU,Product Name,Category,Expiry Date,Days Until Expiry,Current Stock,Location\n";
 
       filteredExpiryItems.forEach(item => {
-        csvContent += `${item.sku},${item.name},${item.category},${item.expiry},${item.daysUntilExpiry},${item.stock},${item.location}\n`;
+        csvContent += `${item.sku},${item.name},${item.category},${item.expiry},${item.daysUntilExpiry},${item.stock} ${item.unit},${item.location}\n`;
       });
 
       filename = "expiring_items_report.csv";
@@ -454,11 +458,11 @@ export function StockControl() {
                     <td className="px-6 py-4 text-muted-foreground">{item.category}</td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex flex-col items-center">
-                        <span className="font-bold text-foreground">{item.currentStock}</span>
-                        <span className="text-xs text-muted-foreground">Min: {item.minStock} | Max: {item.maxStock}</span>
+                        <span className="font-bold text-foreground">{formatQuantity(item.currentStock, item.unit)}</span>
+                        <span className="text-xs text-muted-foreground">Min: {formatQuantity(item.minStock, item.unit)} | Max: {formatQuantity(item.maxStock, item.unit)}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center text-foreground">{item.reorderPoint}</td>
+                    <td className="px-6 py-4 text-center text-foreground">{formatQuantity(item.reorderPoint, item.unit)}</td>
                     <td className="px-6 py-4 text-right text-foreground">₱{item.unitCost.toFixed(2)}</td>
                     <td className="px-6 py-4 text-right font-medium text-foreground">₱{item.totalValue.toFixed(2)}</td>
                     <td className="px-6 py-4 text-center">
@@ -466,7 +470,7 @@ export function StockControl() {
                         <BarChart3 className="w-4 h-4 text-primary" />
                         {item.turnoverRate === null ? "N/A" : `${item.turnoverRate}x`}
                       </span>
-                      <p className="text-[10px] text-muted-foreground">Outflow: {item.movementQuantity}</p>
+                      <p className="text-[10px] text-muted-foreground">Outflow: {formatQuantity(item.movementQuantity, item.unit)}</p>
                     </td>
                     <td className="px-6 py-4 text-center">{getClassificationBadge(item.classification)}</td>
                     <td className="px-6 py-4 text-center">{getStatusBadge(item.status)}</td>
@@ -512,15 +516,15 @@ export function StockControl() {
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground mb-1">Current Stock</p>
-                        <p className={`text-sm font-bold ${item.status === "out-of-stock" ? "text-black" : item.status === "critical" ? "text-red-600" : "text-orange-600"}`}>{item.currentStock}</p>
+                        <p className={`text-sm font-bold ${item.status === "out-of-stock" ? "text-black" : item.status === "critical" ? "text-red-600" : "text-orange-600"}`}>{formatQuantity(item.currentStock, item.unit)}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground mb-1">Min Stock</p>
-                        <p className="text-sm font-medium text-foreground">{item.minStock}</p>
+                        <p className="text-sm font-medium text-foreground">{formatQuantity(item.minStock, item.unit)}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground mb-1">Reorder Point</p>
-                        <p className="text-sm font-medium text-foreground">{item.reorderPoint}</p>
+                        <p className="text-sm font-medium text-foreground">{formatQuantity(item.reorderPoint, item.unit)}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground mb-1">Location</p>
@@ -579,7 +583,7 @@ export function StockControl() {
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Stock Remaining</p>
-                          <p className="text-sm font-bold text-foreground">{item.stock}</p>
+                          <p className="text-sm font-bold text-foreground">{formatQuantity(item.stock, item.unit)}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Location</p>

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Apple, DollarSign, Hash, Tag, Folder, FileText, Save, X, Calendar, Plus, FolderPlus } from "lucide-react";
+import { Apple, PhilippinePeso, Hash, Tag, Folder, FileText, Save, X, Calendar, Plus, FolderPlus } from "lucide-react";
 import { readLocalStorage, writeLocalStorage } from "../lib/localStorage";
-import { defaultInventoryProducts } from "../lib/inventoryLogic";
+import { defaultInventoryProducts, getCategoryHierarchy, getStorageTemperatureOptions } from "../lib/inventoryLogic";
 
 type StoredProduct = {
   id: number;
@@ -17,6 +17,7 @@ type StoredProduct = {
   expiry: string;
   location?: string;
   unit: string;
+  storageTemperature?: string;
 };
 
 type Supplier = {
@@ -49,16 +50,9 @@ export function AddProduct() {
     unit: "",
   });
 
-  const [categoryHierarchy, setCategoryHierarchy] = useState<{ [key: string]: string[] }>({
-    "Meat": ["Poultry (Chicken)", "Beef", "Pork", "Lamb", "Game Meat"],
-    "Fruits": ["Citrus Fruits", "Berries", "Tropical Fruits", "Stone Fruits", "Melons"],
-    "Vegetables": ["Leafy Greens", "Root Vegetables", "Cruciferous", "Nightshades", "Squash"],
-    "Seafood": ["Fish", "Shellfish", "Crustaceans", "Mollusks", "Canned Seafood"],
-    "Dairy": ["Milk Products", "Cheese", "Yogurt", "Butter & Cream", "Eggs"],
-    "Bakery": ["Bread", "Pastries", "Cakes", "Cookies", "Muffins"],
-    "Oils & Condiments": ["Cooking Oils", "Vinegars", "Sauces", "Spices", "Seasonings"],
-    "Frozen Foods": ["Frozen Vegetables", "Frozen Fruits", "Frozen Meals", "Ice Cream", "Frozen Seafood"]
-  });
+  const [categoryHierarchy, setCategoryHierarchy] = useState<{ [key: string]: string[] }>(getCategoryHierarchy);
+  const [storageTemperatureOptions, setStorageTemperatureOptions] = useState<string[]>(getStorageTemperatureOptions);
+  const [newStorageTemperature, setNewStorageTemperature] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,8 +73,9 @@ export function AddProduct() {
       reorderPoint,
       price: Number(formData.price) || 0,
       expiry: formData.expiryDate,
-      location: formData.storageTemp || "Unassigned",
+      location: "Unassigned",
       unit: formData.unit || "pcs",
+      storageTemperature: formData.storageTemp,
     };
 
     writeLocalStorage("inventory.products", [productToAdd, ...products]);
@@ -101,10 +96,12 @@ export function AddProduct() {
 
   const handleAddMainCategory = () => {
     if (newMainCategory.trim()) {
-      setCategoryHierarchy({
+      const nextHierarchy = {
         ...categoryHierarchy,
         [newMainCategory.trim()]: []
-      });
+      };
+      setCategoryHierarchy(nextHierarchy);
+      writeLocalStorage("inventory.categoryHierarchy", nextHierarchy);
       setNewMainCategory("");
       setShowCategoryModal(false);
     }
@@ -112,17 +109,29 @@ export function AddProduct() {
 
   const handleAddSubCategory = () => {
     if (categoryForSubCategory && newSubCategory.trim()) {
-      setCategoryHierarchy({
+      const nextHierarchy = {
         ...categoryHierarchy,
         [categoryForSubCategory]: [
           ...(categoryHierarchy[categoryForSubCategory] || []),
           newSubCategory.trim()
         ]
-      });
+      };
+      setCategoryHierarchy(nextHierarchy);
+      writeLocalStorage("inventory.categoryHierarchy", nextHierarchy);
       setNewSubCategory("");
       setCategoryForSubCategory("");
       setShowCategoryModal(false);
     }
+  };
+
+  const handleAddStorageTemperature = () => {
+    const trimmed = newStorageTemperature.trim();
+    if (!trimmed || storageTemperatureOptions.includes(trimmed)) return;
+    const nextOptions = [...storageTemperatureOptions, trimmed];
+    setStorageTemperatureOptions(nextOptions);
+    writeLocalStorage("inventory.storageTemperatureOptions", nextOptions);
+    setFormData({ ...formData, storageTemp: trimmed });
+    setNewStorageTemperature("");
   };
 
   const storedSuppliers = readLocalStorage<Supplier[]>("purchaseOrders.suppliers", []);
@@ -263,10 +272,28 @@ export function AddProduct() {
                     className="w-full px-4 py-3 bg-input-background border border-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all appearance-none cursor-pointer"
                   >
                     <option value="">Select temperature</option>
-                    <option value="frozen">Frozen (-18°C)</option>
-                    <option value="refrigerated">Refrigerated (2-8°C)</option>
-                    <option value="room">Room Temperature</option>
+                    {storageTemperatureOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
                   </select>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      type="text"
+                      value={newStorageTemperature}
+                      onChange={(e) => setNewStorageTemperature(e.target.value)}
+                      placeholder="Add storage temperature"
+                      className="min-w-0 flex-1 px-3 py-2 text-sm bg-input-background border border-input rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddStorageTemperature}
+                      disabled={!newStorageTemperature.trim()}
+                      className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Add storage temperature"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="md:col-span-2">
@@ -290,17 +317,17 @@ export function AddProduct() {
             {/* Pricing & Inventory */}
             <div className="bg-card rounded-2xl p-6 shadow-sm border border-border">
               <h2 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-green-600" />
+                <PhilippinePeso className="w-5 h-5 text-green-600" />
                 Pricing & Inventory
               </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label htmlFor="price" className="block text-sm mb-2 text-foreground">
-                    Price (USD) *
+                    Price (PHP) *
                   </label>
                   <div className="relative">
-                    <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <PhilippinePeso className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input
                       id="price"
                       name="price"
@@ -563,3 +590,4 @@ export function AddProduct() {
     </div>
   );
 }
+

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Plus } from "lucide-react";
-import { defaultCategoryHierarchy } from "../lib/inventoryLogic";
+import { getCategoryHierarchy } from "../lib/inventoryLogic";
+import { useLocalStorageState } from "../lib/localStorage";
 
 type SupplierProduct = {
   name: string;
@@ -56,6 +57,12 @@ export function PurchaseOrderItemInput({
 }: PurchaseOrderItemInputProps) {
   const [query, setQuery] = useState(value.productName);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [categoryHierarchy, setCategoryHierarchy] = useLocalStorageState<{ [key: string]: string[] }>(
+    "inventory.categoryHierarchy",
+    getCategoryHierarchy()
+  );
+  const [newCategory, setNewCategory] = useState("");
+  const [newSubCategory, setNewSubCategory] = useState("");
 
   useEffect(() => {
     setQuery(value.productName);
@@ -79,8 +86,8 @@ export function PurchaseOrderItemInput({
     [normalizedQuery, productDatabase]
   );
 
-  const categoryOptions = Object.keys(defaultCategoryHierarchy);
-  const subCategoryOptions = value.category ? defaultCategoryHierarchy[value.category] || [] : [];
+  const categoryOptions = Object.keys(categoryHierarchy);
+  const subCategoryOptions = value.category ? categoryHierarchy[value.category] || [] : [];
   const canAddItem = Boolean(
     value.productName.trim() &&
       value.quantity.trim() &&
@@ -164,6 +171,35 @@ export function PurchaseOrderItemInput({
     });
   };
 
+  const handleAddCategory = () => {
+    const trimmed = newCategory.trim();
+    if (!trimmed || categoryHierarchy[trimmed]) return;
+    setCategoryHierarchy({
+      ...categoryHierarchy,
+      [trimmed]: [],
+    });
+    onChange({
+      ...value,
+      category: trimmed,
+      subCategory: "",
+    });
+    setNewCategory("");
+  };
+
+  const handleAddSubCategory = () => {
+    const trimmed = newSubCategory.trim();
+    if (!value.category || !trimmed || subCategoryOptions.includes(trimmed)) return;
+    setCategoryHierarchy({
+      ...categoryHierarchy,
+      [value.category]: [...subCategoryOptions, trimmed],
+    });
+    onChange({
+      ...value,
+      subCategory: trimmed,
+    });
+    setNewSubCategory("");
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -234,40 +270,87 @@ export function PurchaseOrderItemInput({
           <label htmlFor="po-item-category" className="block text-xs mb-1 text-foreground">
             Category {value.isNewProduct ? "*" : ""}
           </label>
-          <select
-            id="po-item-category"
-            value={value.category}
-            onChange={(e) => handleFieldChange("category", e.target.value)}
-            disabled={!value.isNewProduct}
-            className="w-full px-3 py-2 text-sm bg-input-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all appearance-none cursor-pointer"
-          >
-            <option value="">Select category</option>
-            {categoryOptions.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
+          <div className="space-y-2">
+            <select
+              id="po-item-category"
+              value={value.category}
+              onChange={(e) => {
+                handleFieldChange("category", e.target.value);
+                onChange({ ...value, category: e.target.value, subCategory: "" });
+              }}
+              disabled={!value.isNewProduct}
+              className="w-full px-3 py-2 text-sm bg-input-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all appearance-none cursor-pointer"
+            >
+              <option value="">Select category</option>
+              {categoryOptions.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+            {value.isNewProduct && (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  placeholder="New category"
+                  className="min-w-0 flex-1 px-3 py-2 text-sm bg-input-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddCategory}
+                  disabled={!newCategory.trim()}
+                  className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Add category"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div>
           <label htmlFor="po-item-subcategory" className="block text-xs mb-1 text-foreground">
             Subcategory
           </label>
-          <select
-            id="po-item-subcategory"
-            value={value.subCategory}
-            onChange={(e) => handleFieldChange("subCategory", e.target.value)}
-            disabled={!value.isNewProduct || !value.category}
-            className="w-full px-3 py-2 text-sm bg-input-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all appearance-none cursor-pointer"
-          >
-            <option value="">Select subcategory</option>
-            {subCategoryOptions.map((subCategory) => (
-              <option key={subCategory} value={subCategory}>
-                {subCategory}
-              </option>
-            ))}
-          </select>
+          <div className="space-y-2">
+            <select
+              id="po-item-subcategory"
+              value={value.subCategory}
+              onChange={(e) => handleFieldChange("subCategory", e.target.value)}
+              disabled={!value.isNewProduct || !value.category}
+              className="w-full px-3 py-2 text-sm bg-input-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all appearance-none cursor-pointer"
+            >
+              <option value="">Select subcategory</option>
+              {subCategoryOptions.map((subCategory) => (
+                <option key={subCategory} value={subCategory}>
+                  {subCategory}
+                </option>
+              ))}
+            </select>
+            {value.isNewProduct && value.category && (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newSubCategory}
+                  onChange={(e) => setNewSubCategory(e.target.value)}
+                  placeholder="New subcategory"
+                  className="min-w-0 flex-1 px-3 py-2 text-sm bg-input-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddSubCategory}
+                  disabled={!newSubCategory.trim()}
+                  className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Add subcategory"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div>

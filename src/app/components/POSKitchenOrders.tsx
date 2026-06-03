@@ -62,6 +62,7 @@ export function POSKitchenOrders() {
   const [notes, setNotes] = useState("");
   const [voidReason, setVoidReason] = useState("");
   const [voidingOrderId, setVoidingOrderId] = useState("");
+  const [excludedIngredientIds, setExcludedIngredientIds] = useState<Set<string>>(new Set());
 
   const [orders, setOrders] = useLocalStorageState<POSOrder[]>("pos.orders", []);
   const recipes = readLocalStorage<Recipe[]>("recipes.records", []);
@@ -103,13 +104,30 @@ export function POSKitchenOrders() {
     );
   });
 
+  const selectedIngredientPreview = ingredientPreview.filter((item) => !excludedIngredientIds.has(item.id));
+
   const canCompleteOrder = Boolean(
     receiptNo.trim() &&
       selectedRecipe &&
       Number(quantity) > 0 &&
-      ingredientPreview.length > 0 &&
-      ingredientPreview.every((item) => item.product && item.unitMatches && item.hasEnoughStock)
+      selectedIngredientPreview.length > 0 &&
+      selectedIngredientPreview.every((item) => item.product && item.unitMatches && item.hasEnoughStock)
   );
+
+  const handleRecipeChange = (nextRecipeId: string) => {
+    setRecipeId(nextRecipeId);
+    setExcludedIngredientIds(new Set());
+  };
+
+  const toggleIngredientIncluded = (ingredientId: string) => {
+    const nextExcluded = new Set(excludedIngredientIds);
+    if (nextExcluded.has(ingredientId)) {
+      nextExcluded.delete(ingredientId);
+    } else {
+      nextExcluded.add(ingredientId);
+    }
+    setExcludedIngredientIds(nextExcluded);
+  };
 
   const completeOrder = (event: React.FormEvent) => {
     event.preventDefault();
@@ -122,11 +140,11 @@ export function POSKitchenOrders() {
     const movements = readLocalStorage<InventoryMovement[]>("inventory.movements", []);
 
     const nextProducts = products.map((product) => {
-      const consumed = ingredientPreview.find((item) => item.product?.id === product.id);
+      const consumed = selectedIngredientPreview.find((item) => item.product?.id === product.id);
       return consumed ? { ...product, stock: product.stock - consumed.required } : product;
     });
 
-    const nextMovements: InventoryMovement[] = ingredientPreview.map((item, index) => ({
+    const nextMovements: InventoryMovement[] = selectedIngredientPreview.map((item, index) => ({
       id: `MOV-${Date.now()}-${index}`,
       type: "pos-consumption",
       source: "pos-kitchen",
@@ -156,6 +174,7 @@ export function POSKitchenOrders() {
     setOrders([order, ...orders]);
     setReceiptNo("");
     setRecipeId("");
+    setExcludedIngredientIds(new Set());
     setQuantity("1");
     setNotes("");
   };
@@ -224,7 +243,7 @@ export function POSKitchenOrders() {
 
             <div>
               <label className="mb-1 block text-xs text-foreground">Menu Item / Recipe</label>
-              <select value={recipeId} onChange={(event) => setRecipeId(event.target.value)} className="w-full rounded-lg border border-input bg-input-background px-3 py-2 text-sm outline-none focus:border-primary" required>
+              <select value={recipeId} onChange={(event) => handleRecipeChange(event.target.value)} className="w-full rounded-lg border border-input bg-input-background px-3 py-2 text-sm outline-none focus:border-primary" required>
                 <option value="">Select recipe</option>
                 {activeRecipes.map((recipe) => (
                   <option key={recipe.id} value={recipe.id}>{recipe.name}</option>
@@ -249,19 +268,36 @@ export function POSKitchenOrders() {
               <p className="text-sm text-muted-foreground">Select a recipe to preview stock deductions.</p>
             ) : (
               <div className="space-y-2">
-                {ingredientPreview.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between rounded bg-muted/40 p-2 text-sm">
-                    <div>
+                {ingredientPreview.map((item) => {
+                  const isIncluded = !excludedIngredientIds.has(item.id);
+
+                  return (
+                  <div key={item.id} className={`flex items-center justify-between gap-3 rounded p-2 text-sm ${isIncluded ? "bg-muted/40" : "bg-muted/20 opacity-70"}`}>
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={isIncluded}
+                        onChange={() => toggleIngredientIncluded(item.id)}
+                        className="mt-1 h-4 w-4 rounded border-muted-foreground text-primary focus:ring-primary"
+                        aria-label={`Include ${item.name} in stock deduction`}
+                      />
+                      <div>
                       <p className="font-medium text-foreground">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">Need {item.required} {item.deductionUnit} | Stock {item.product?.stock ?? "missing"} {item.product?.unit || ""}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {isIncluded ? "Deduct" : "Skipped"} {item.required} {item.deductionUnit} | Stock {item.product?.stock ?? "missing"} {item.product?.unit || ""}
+                      </p>
+                      </div>
                     </div>
-                    {item.hasEnoughStock ? (
+                    {!isIncluded ? (
+                      <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">Skipped</span>
+                    ) : item.hasEnoughStock ? (
                       <CheckCircle className="h-5 w-5 text-green-600" />
                     ) : (
                       <AlertTriangle className="h-5 w-5 text-red-600" />
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

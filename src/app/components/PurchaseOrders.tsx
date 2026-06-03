@@ -610,8 +610,16 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
   const handleAddSupplier = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!newSupplier.name.trim()) {
-      alert("Please enter supplier name");
+    const missingSupplierFields = [
+      ["supplier name", newSupplier.name],
+      ["contact person", newSupplier.contact],
+      ["email", newSupplier.email],
+      ["phone", newSupplier.phone],
+      ["address", newSupplier.address],
+    ].filter(([, value]) => !String(value).trim());
+
+    if (missingSupplierFields.length > 0) {
+      alert(`Please complete supplier ${missingSupplierFields.map(([field]) => field).join(", ")}`);
       return;
     }
 
@@ -1335,7 +1343,7 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
 
               <div>
                 <label htmlFor="supplierContact" className="block text-sm mb-1 text-foreground font-medium">
-                  Contact Person
+                  Contact Person *
                 </label>
                 <input
                   id="supplierContact"
@@ -1345,12 +1353,13 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
                   onChange={handleSupplierInputChange}
                   placeholder="e.g., John Doe"
                   className="w-full px-3 py-2 text-sm bg-input-background border border-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                  required
                 />
               </div>
 
               <div>
                 <label htmlFor="supplierEmail" className="block text-sm mb-1 text-foreground font-medium">
-                  Email
+                  Email *
                 </label>
                 <input
                   id="supplierEmail"
@@ -1360,12 +1369,13 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
                   onChange={handleSupplierInputChange}
                   placeholder="e.g., contact@supplier.com"
                   className="w-full px-3 py-2 text-sm bg-input-background border border-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                  required
                 />
               </div>
 
               <div>
                 <label htmlFor="supplierPhone" className="block text-sm mb-1 text-foreground font-medium">
-                  Phone
+                  Phone *
                 </label>
                 <input
                   id="supplierPhone"
@@ -1375,12 +1385,13 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
                   onChange={handleSupplierInputChange}
                   placeholder="e.g., +1 234 567 8900"
                   className="w-full px-3 py-2 text-sm bg-input-background border border-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                  required
                 />
               </div>
 
               <div>
                 <label htmlFor="supplierAddress" className="block text-sm mb-1 text-foreground font-medium">
-                  Address
+                  Address *
                 </label>
                 <textarea
                   id="supplierAddress"
@@ -1390,6 +1401,7 @@ if (!currentItem.productName.trim() || !currentItem.quantity.trim() || !currentI
                   placeholder="e.g., 123 Farm Road, City, State, ZIP"
                   className="w-full px-3 py-2 text-sm bg-input-background border border-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all resize-none"
                   rows={3}
+                  required
                 />
               </div>
 

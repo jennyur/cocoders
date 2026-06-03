@@ -27,10 +27,35 @@ export const defaultCategoryHierarchy: { [key: string]: string[] } = {
   "Frozen Foods": ["Frozen Vegetables", "Frozen Fruits", "Frozen Meals", "Ice Cream", "Frozen Seafood"],
 };
 
+export const defaultStorageTemperatureOptions = [
+  "Frozen (-18 C or below)",
+  "Chilled (0-4 C)",
+  "Cool Storage (5-10 C)",
+  "Room Temperature (20-25 C)",
+  "Dry Storage",
+];
+
 export const defaultInventoryProducts: InventoryProduct[] = [];
 
 export function getInventoryProducts() {
   return readLocalStorage<InventoryProduct[]>("inventory.products", defaultInventoryProducts);
+}
+
+export function getCategoryHierarchy() {
+  const storedHierarchy = readLocalStorage<{ [key: string]: string[] }>("inventory.categoryHierarchy", {});
+
+  return Object.entries(storedHierarchy).reduce(
+    (hierarchy, [category, subCategories]) => ({
+      ...hierarchy,
+      [category]: Array.from(new Set([...(hierarchy[category] || []), ...subCategories])),
+    }),
+    { ...defaultCategoryHierarchy }
+  );
+}
+
+export function getStorageTemperatureOptions() {
+  const customOptions = readLocalStorage<string[]>("inventory.storageTemperatureOptions", []);
+  return Array.from(new Set([...defaultStorageTemperatureOptions, ...customOptions].filter(Boolean)));
 }
 
 export function splitCategory(category: string) {
@@ -63,11 +88,16 @@ export function isExpiringSoon(product: InventoryProduct) {
 }
 
 export function formatCurrency(value: number) {
-  return `₱${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  return `PHP ${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
 export function getInventoryValue(products: InventoryProduct[]) {
   return products.reduce((sum, product) => sum + product.stock * product.price, 0);
+}
+
+export function formatQuantity(value: number, unit?: string) {
+  const unitLabel = unit?.trim() || "unit";
+  return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unitLabel}`;
 }
 
 export function getCategoryQuantityData(products: InventoryProduct[]) {
@@ -84,3 +114,4 @@ export function getCategoryQuantityData(products: InventoryProduct[]) {
     value,
   }));
 }
+

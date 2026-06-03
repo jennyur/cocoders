@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { Apple, TrendingUp, AlertTriangle, DollarSign, ShoppingCart, ArrowUp, ArrowDown, Calendar, Filter, CheckCircle, XCircle, Eye, Clock } from "lucide-react";
+import { Apple, TrendingUp, AlertTriangle, PhilippinePeso, ShoppingCart, ArrowUp, ArrowDown, Calendar, Filter, CheckCircle, XCircle, Eye, Clock } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { readLocalStorage, useLocalStorageState } from "../lib/localStorage";
 import { defaultCategoryHierarchy, formatCurrency, getInventoryProducts, getInventoryValue, isExpiringSoon, splitCategory } from "../lib/inventoryLogic";
@@ -109,7 +109,7 @@ export function Dashboard() {
       value: formatCurrency(getInventoryValue(products)),
       change: "Live",
       trend: "up",
-      icon: DollarSign,
+      icon: PhilippinePeso,
       color: "from-green-500 to-lime-500",
     },
     {

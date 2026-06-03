@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { MapPin, Search, Package, TrendingDown, AlertCircle, Building2, BarChart3, Eye, ArrowLeftRight } from "lucide-react";
-import { getInventoryProducts, getStockStatus, splitCategory, StockStatus } from "../lib/inventoryLogic";
+import { formatQuantity, getInventoryProducts, getStockStatus, getStorageTemperatureOptions, splitCategory, StockStatus } from "../lib/inventoryLogic";
 
 type LocationStock = {
   location: string;
@@ -16,6 +16,7 @@ type Product = {
   category: string;
   totalStock: number;
   unit: string;
+  storageTemperature?: string;
   locations: LocationStock[];
 };
 
@@ -34,6 +35,7 @@ type Location = {
 export function MultiLocation() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("all");
+  const [selectedStorageTemperature, setSelectedStorageTemperature] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [viewMode, setViewMode] = useState<"products" | "locations">("products");
 
@@ -119,6 +121,7 @@ export function MultiLocation() {
   ];
 
   const inventoryProducts = getInventoryProducts();
+  const storageTemperatureOptions = getStorageTemperatureOptions();
   const products: Product[] = inventoryProducts.map((item) => {
     const locationName = item.location || "Unassigned";
     const { main } = splitCategory(item.category);
@@ -128,7 +131,8 @@ export function MultiLocation() {
       name: item.name,
       category: main,
       totalStock: item.stock,
-      unit: "pcs",
+      unit: item.unit || "pcs",
+      storageTemperature: item.storageTemperature,
       locations: [
         {
           location: locationName,
@@ -177,7 +181,9 @@ export function MultiLocation() {
       }
     }
 
-    return matchesSearch && matchesLocation && matchesStatus;
+    const matchesStorageTemperature = selectedStorageTemperature === "all" || product.storageTemperature === selectedStorageTemperature;
+
+    return matchesSearch && matchesLocation && matchesStatus && matchesStorageTemperature;
   });
 
   const getStatusBadge = (status: string) => {
@@ -313,6 +319,16 @@ export function MultiLocation() {
               <option value="healthy">Healthy Stock (71% - 100%)</option>
               <option value="overstock">Overstock</option>
             </select>
+            <select
+              value={selectedStorageTemperature}
+              onChange={(e) => setSelectedStorageTemperature(e.target.value)}
+              className="px-3 py-2 bg-input-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all appearance-none cursor-pointer text-sm"
+            >
+              <option value="all">All Storage Temps</option>
+              {storageTemperatureOptions.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
           </div>
         </div>
       )}
@@ -350,7 +366,7 @@ export function MultiLocation() {
                     <td className="px-4 py-3 text-foreground text-sm font-medium">{product.name}</td>
                     <td className="px-4 py-3 text-muted-foreground text-sm">{product.category}</td>
                     <td className="px-4 py-3 text-center text-foreground text-sm font-bold">
-                      {product.totalStock} {product.unit}
+                      {formatQuantity(product.totalStock, product.unit)}
                     </td>
                     {selectedLocation === "all" ? (
                       <td className="px-4 py-3">
@@ -358,7 +374,7 @@ export function MultiLocation() {
                           {product.locations.map((loc, idx) => (
                             <div key={idx} className="flex items-center gap-2 bg-muted/50 px-2 py-1 rounded-lg">
                               <MapPin className="w-3 h-3 text-muted-foreground" />
-                              <span className="text-xs text-foreground">{loc.location.split(' ')[0]}: {loc.currentStock}</span>
+                              <span className="text-xs text-foreground">{loc.location.split(' ')[0]}: {formatQuantity(loc.currentStock, product.unit)}</span>
                               {getStatusBadge(loc.status)}
                             </div>
                           ))}
@@ -370,10 +386,10 @@ export function MultiLocation() {
                         return locationStock ? (
                           <>
                             <td className="px-4 py-3 text-center text-foreground text-sm font-bold">
-                              {locationStock.currentStock} {product.unit}
+                              {formatQuantity(locationStock.currentStock, product.unit)}
                             </td>
                             <td className="px-4 py-3 text-center text-muted-foreground text-sm">
-                              {locationStock.minStock} / {locationStock.maxStock}
+                              {formatQuantity(locationStock.minStock, product.unit)} / {formatQuantity(locationStock.maxStock, product.unit)}
                             </td>
                             <td className="px-4 py-3 text-center">
                               {getStatusBadge(locationStock.status)}

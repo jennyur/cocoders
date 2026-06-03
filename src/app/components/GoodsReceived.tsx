@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Search, Filter, CheckCircle, Package, Calendar, AlertCircle, ClipboardCheck, X, XCircle, Eye } from "lucide-react";
 import { readLocalStorage, useLocalStorageState, writeLocalStorage } from "../lib/localStorage";
-import { defaultInventoryProducts, InventoryProduct } from "../lib/inventoryLogic";
+import { defaultInventoryProducts, getStorageTemperatureOptions, InventoryProduct } from "../lib/inventoryLogic";
 
 type QualityCheckCriteria = {
   appearance: "pass" | "fail" | "";
@@ -104,14 +104,6 @@ const getEarliestDate = (dates: string[]) => {
     .filter(Boolean)
     .sort((a, b) => new Date(`${a}T00:00:00`).getTime() - new Date(`${b}T00:00:00`).getTime())[0] || "";
 };
-
-const STORAGE_TEMPERATURE_OPTIONS = [
-  "Frozen (-18 C or below)",
-  "Chilled (0-4 C)",
-  "Cool Storage (5-10 C)",
-  "Room Temperature (20-25 C)",
-  "Dry Storage",
-];
 
 const INSPECTION_CRITERIA: Array<{ key: InspectionCriterionKey; label: string; description: string }> = [
   { key: "appearance", label: "Appearance & Freshness", description: "Visible spoilage, damage, discoloration, freshness" },
@@ -230,6 +222,11 @@ export function GoodsReceived() {
   const [itemCriteriaScores, setItemCriteriaScores] = useState<{
     [itemIndex: number]: Partial<Record<InspectionCriterionKey, { passed: string; total: string; remarks: string }>>;
   }>({});
+  const [storageTemperatureOptions, setStorageTemperatureOptions] = useLocalStorageState<string[]>(
+    "inventory.storageTemperatureOptions",
+    getStorageTemperatureOptions()
+  );
+  const [newStorageTemperature, setNewStorageTemperature] = useState("");
 
   const [receivedGoods, setReceivedGoods] = useLocalStorageState<GoodsItem[]>("goodsReceived.records", []);
 
@@ -333,6 +330,13 @@ export function GoodsReceived() {
       ...storageTemperatures,
       [index]: value,
     });
+  };
+
+  const handleAddStorageTemperature = () => {
+    const trimmed = newStorageTemperature.trim();
+    if (!trimmed || storageTemperatureOptions.includes(trimmed)) return;
+    setStorageTemperatureOptions([...storageTemperatureOptions, trimmed]);
+    setNewStorageTemperature("");
   };
 
   const handleAcceptedQuantityChange = (index: number, value: string) => {
@@ -588,6 +592,14 @@ export function GoodsReceived() {
                          item.supplier.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSearch;
   });
+
+  const canAcceptSelectedGoods = Boolean(
+    selectedItem?.receivedItems?.some((item, index) => Math.min(Math.max(Number(acceptedQuantities[index]) || 0, 0), item.quantity) > 0) &&
+    selectedItem.receivedItems.every((item, index) => {
+      const acceptedQuantity = Math.min(Math.max(Number(acceptedQuantities[index]) || 0, 0), item.quantity);
+      return acceptedQuantity <= 0 || (Boolean(expiryDates[index] || item.expiryDate) && Boolean((storageTemperatures[index] || item.storageTemperature || "").trim()));
+    })
+  );
 
   const getStatusBadge = (status: string) => {
     const styles = {
@@ -954,10 +966,27 @@ export function GoodsReceived() {
                               className="w-full rounded-lg border border-input bg-input-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-50"
                             >
                               <option value="">Select storage temperature</option>
-                              {STORAGE_TEMPERATURE_OPTIONS.map((option) => (
+                              {storageTemperatureOptions.map((option) => (
                                 <option key={option} value={option}>{option}</option>
                               ))}
                             </select>
+                            <div className="mt-2 flex gap-2">
+                              <input
+                                type="text"
+                                value={newStorageTemperature}
+                                onChange={(event) => setNewStorageTemperature(event.target.value)}
+                                placeholder="Add storage temperature"
+                                className="min-w-0 flex-1 rounded-lg border border-input bg-input-background px-2 py-2 text-xs outline-none focus:border-primary"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleAddStorageTemperature}
+                                disabled={!newStorageTemperature.trim()}
+                                className="rounded-lg bg-primary px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
+                              >
+                                Add
+                              </button>
+                            </div>
                           </div>
                           <div className="md:col-span-2">
                             <label htmlFor={`item-remarks-${index}`} className="mb-1 block text-xs font-medium text-foreground">
@@ -997,7 +1026,8 @@ export function GoodsReceived() {
               <div className="flex gap-3 pt-4 border-t border-border">
                 <button
                   onClick={() => handleQualityCheckSubmit("accept")}
-                  className="flex-1 px-6 py-4 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all duration-200 flex items-center justify-center gap-2 font-semibold"
+                  disabled={!canAcceptSelectedGoods}
+                  className="flex-1 px-6 py-4 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all duration-200 flex items-center justify-center gap-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <CheckCircle className="w-5 h-5" />
                   Complete QC & Add Accepted Stock

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Download, Calendar, TrendingUp, Package, DollarSign, ShoppingCart, Filter } from "lucide-react";
+import { Download, Calendar, TrendingUp, Package, PhilippinePeso, ShoppingCart, Filter } from "lucide-react";
 import { readLocalStorage } from "../lib/localStorage";
 import { defaultCategoryHierarchy, formatCurrency, getInventoryProducts, getInventoryValue, splitCategory } from "../lib/inventoryLogic";
 
@@ -182,7 +182,7 @@ export function Reports() {
         <div className="bg-card rounded-2xl p-2 shadow-sm border border-border">
           <div className="flex items-center justify-between mb-6">
             <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-white" />
+              <PhilippinePeso className="w-5 h-5 text-white" />
             </div>
             <span className="text-sm text-green-600 font-medium">+24.5%</span>
           </div>

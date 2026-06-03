@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeftRight, Plus, Search, TrendingUp, TrendingDown, AlertCircle, CheckCircle, Clock, X, FileText, Trash2, DollarSign, BarChart3, Calendar } from "lucide-react";
+import { ArrowLeftRight, Plus, Search, TrendingUp, TrendingDown, AlertCircle, CheckCircle, Clock, X, FileText, Trash2, PhilippinePeso, BarChart3, Calendar } from "lucide-react";
 import { useLocalStorageState } from "../lib/localStorage";
 import { getInventoryProducts, InventoryProduct } from "../lib/inventoryLogic";
 
@@ -661,7 +661,7 @@ export function Transfers() {
             <div className="bg-card rounded-xl p-4 shadow-sm border border-border">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-rose-500 rounded-lg flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-white" />
+                  <PhilippinePeso className="w-5 h-5 text-white" />
                 </div>
                 <div>
                   <p className="text-muted-foreground text-xs">Total Waste Value</p>

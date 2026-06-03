@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Search, Filter, Edit, Trash2, Eye, AlertCircle, X, Save, ArrowRight, ChevronRight, ChevronDown, Folder, FolderOpen, Package } from "lucide-react";
 import { useLocalStorageState } from "../lib/localStorage";
-import { defaultInventoryProducts } from "../lib/inventoryLogic";
+import { defaultInventoryProducts, formatQuantity, getCategoryHierarchy, getStorageTemperatureOptions } from "../lib/inventoryLogic";
 
 type Product = {
   id: number;
@@ -17,14 +17,6 @@ type Product = {
   storageTemperature?: string;
 };
 
-const STORAGE_TEMPERATURE_OPTIONS = [
-  "Frozen (-18 C or below)",
-  "Chilled (0-4 C)",
-  "Cool Storage (5-10 C)",
-  "Room Temperature (20-25 C)",
-  "Dry Storage",
-];
-
 export function Inventory() {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedMainCategories, setExpandedMainCategories] = useState<Set<string>>(new Set());
@@ -37,16 +29,8 @@ export function Inventory() {
   const [editSubCategory, setEditSubCategory] = useState("");
 
   // Hierarchical category structure
-  const categoryHierarchy: { [key: string]: string[] } = {
-    "Fruits": ["Citrus Fruits", "Berries", "Tropical Fruits", "Stone Fruits", "Melons"],
-    "Vegetables": ["Leafy Greens", "Root Vegetables", "Cruciferous", "Nightshades", "Squash"],
-    "Meat": ["Poultry", "Beef", "Pork", "Lamb", "Game Meat"],
-    "Seafood": ["Fish", "Shellfish", "Crustaceans", "Mollusks", "Canned Seafood"],
-    "Dairy": ["Milk Products", "Cheese", "Yogurt", "Butter & Cream", "Eggs"],
-    "Bakery": ["Bread", "Pastries", "Cakes", "Cookies", "Muffins"],
-    "Oils & Condiments": ["Cooking Oils", "Vinegars", "Sauces", "Spices", "Seasonings"],
-    "Frozen Foods": ["Frozen Vegetables", "Frozen Fruits", "Frozen Meals", "Ice Cream", "Frozen Seafood"]
-  };
+  const categoryHierarchy = getCategoryHierarchy();
+  const storageTemperatureOptions = getStorageTemperatureOptions();
 
   const [products, setProducts] = useLocalStorageState<Product[]>("inventory.products", defaultInventoryProducts);
 
@@ -343,7 +327,7 @@ export function Inventory() {
 
                                     <div>
                                       <p className={`text-sm font-bold ${getStockStatus(product.stock, product.maxStock).textColor}`}>
-                                        {product.stock}/{product.maxStock}
+                                        {formatQuantity(product.stock, product.unit)} / {formatQuantity(product.maxStock, product.unit)}
                                       </p>
                                     </div>
 
@@ -541,7 +525,7 @@ export function Inventory() {
                     className="w-full px-4 py-3 bg-input-background border border-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
                   >
                     <option value="">Select storage temperature</option>
-                    {STORAGE_TEMPERATURE_OPTIONS.map((option) => (
+                    {storageTemperatureOptions.map((option) => (
                       <option key={option} value={option}>{option}</option>
                     ))}
                   </select>
